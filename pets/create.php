@@ -19,15 +19,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $owner_id = clean_input($_POST['owner_id']);
         $nama_hewan = clean_input($_POST['nama_hewan']);
         $jenis = clean_input($_POST['jenis']);
-        $ras = clean_input($_POST['ras']);
+        $ras = clean_input($_POST['ras'] ?? '');
         $jenis_kelamin = clean_input($_POST['jenis_kelamin']);
-        $tanggal_lahir = clean_input($_POST['tanggal_lahir']);
-        $warna = clean_input($_POST['warna']);
+        $tanggal_lahir = clean_input($_POST['tanggal_lahir'] ?? null);
+        $berat_badan = clean_input($_POST['berat_badan'] ?? null);
+        $warna = clean_input($_POST['warna'] ?? '');
+        $ciri_khusus = clean_input($_POST['ciri_khusus'] ?? '');
         $status = 'Aktif'; // Default status for new pets
-        $catatan = clean_input($_POST['catatan']);
 
         // Handle file upload
-        $foto_url = '';
+        $foto_url = null;
         if (!empty($_FILES['foto']['name'])) {
             $foto_url = handle_file_upload($_FILES['foto'], 'pets');
             if ($foto_url === false) {
@@ -39,18 +40,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("
             INSERT INTO pet (
                 owner_id, nama_hewan, jenis, ras, jenis_kelamin, 
-                tanggal_lahir, warna, status, catatan, foto_url, 
-                tanggal_registrasi
+                tanggal_lahir, berat_badan, warna, ciri_khusus, 
+                foto_url, status
             ) VALUES (
                 ?, ?, ?, ?, ?, 
-                ?, ?, ?, ?, ?,
-                CURRENT_TIMESTAMP
+                ?, ?, ?, ?, 
+                ?, ?
             )
         ");
 
         $stmt->execute([
             $owner_id, $nama_hewan, $jenis, $ras, $jenis_kelamin,
-            $tanggal_lahir, $warna, $status, $catatan, $foto_url
+            $tanggal_lahir, $berat_badan, $warna, $ciri_khusus,
+            $foto_url, $status
         ]);
 
         // Commit transaction
@@ -112,10 +114,17 @@ include '../includes/header.php';
                     <label class="block text-gray-700 text-sm font-bold mb-2" for="jenis">
                         Jenis Hewan <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" name="jenis" id="jenis" required
-                           class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                           placeholder="Contoh: Kucing, Anjing, dll"
-                           value="<?php echo $_POST['jenis'] ?? ''; ?>">
+                    <select name="jenis" id="jenis" required
+                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Pilih Jenis Hewan</option>
+                        <option value="Anjing" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Anjing') ? 'selected' : ''; ?>>Anjing</option>
+                        <option value="Kucing" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Kucing') ? 'selected' : ''; ?>>Kucing</option>
+                        <option value="Burung" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Burung') ? 'selected' : ''; ?>>Burung</option>
+                        <option value="Kelinci" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Kelinci') ? 'selected' : ''; ?>>Kelinci</option>
+                        <option value="Hamster" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Hamster') ? 'selected' : ''; ?>>Hamster</option>
+                        <option value="Reptil" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Reptil') ? 'selected' : ''; ?>>Reptil</option>
+                        <option value="Lainnya" <?php echo (isset($_POST['jenis']) && $_POST['jenis'] === 'Lainnya') ? 'selected' : ''; ?>>Lainnya</option>
+                    </select>
                 </div>
 
                 <div>
@@ -150,11 +159,22 @@ include '../includes/header.php';
                 </div>
 
                 <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="berat_badan">
+                        Berat Badan (kg)
+                    </label>
+                    <input type="number" step="0.01" name="berat_badan" id="berat_badan"
+                           class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Contoh: 5.5"
+                           value="<?php echo $_POST['berat_badan'] ?? ''; ?>">
+                </div>
+
+                <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2" for="warna">
                         Warna
                     </label>
                     <input type="text" name="warna" id="warna"
                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Contoh: Putih, Coklat, dll"
                            value="<?php echo $_POST['warna'] ?? ''; ?>">
                 </div>
 
@@ -170,15 +190,15 @@ include '../includes/header.php';
                     </p>
                 </div>
 
-                <!-- Notes -->
+                <!-- Special Characteristics -->
                 <div class="col-span-2">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="catatan">
-                        Catatan
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="ciri_khusus">
+                        Ciri Khusus
                     </label>
-                    <textarea name="catatan" id="catatan" rows="4"
+                    <textarea name="ciri_khusus" id="ciri_khusus" rows="4"
                               class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Tambahkan catatan khusus tentang hewan ini..."
-                    ><?php echo $_POST['catatan'] ?? ''; ?></textarea>
+                              placeholder="Tambahkan ciri khusus tentang hewan ini (tanda lahir, perilaku, dll)..."
+                    ><?php echo $_POST['ciri_khusus'] ?? ''; ?></textarea>
                 </div>
             </div>
 

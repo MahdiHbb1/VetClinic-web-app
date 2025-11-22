@@ -50,7 +50,7 @@ docker-compose up -d
 - URL: http://localhost:8080
 - Default Login:
   - Username: `admin`
-  - Password: `password`
+  - Password: `admin123`
 
 ### Database Setup
 
@@ -118,6 +118,28 @@ Tabel utama:
 - ✅ Session management
 - ✅ Content Security Policy headers
 - ✅ XSS protection
+- ✅ File upload validation (MIME type checking)
+- ✅ Input sanitization
+
+## Recent Updates (November 2025)
+
+### ✅ CRUD Operations - All Fixed & Verified
+All Create, Read, Update, Delete operations have been thoroughly tested and aligned with the database schema:
+
+- **Medical Records**: Fixed column names (tanggal_kunjungan, diagnosa, keluhan, catatan_dokter)
+- **Inventory/Medicine**: Updated to use `medicine` table (obat_id, nama_obat, stok)
+- **Pets**: Fixed ciri_khusus, berat_badan fields, added photo upload support
+- **Appointments**: Complete overhaul - fixed all column names (tanggal_appointment, jam_appointment, jenis_layanan, keluhan_awal)
+- **Veterinarian**: Proper table mapping with correct columns
+- **Service**: Category management aligned with service table
+- **Owners**: Validated all CRUD operations
+
+### 🔧 Bug Fixes
+- Font Awesome icons now load correctly (CSP headers fixed)
+- Removed references to non-existent tables (appointment_history, system_log)
+- Simplified operations by removing over-engineered features
+- Added missing function includes
+- Updated JavaScript element references
 
 ## Development
 

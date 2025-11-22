@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = 'Detail Janji Temu';
 
@@ -34,21 +34,13 @@ $stmt = $pdo->prepare("
         o.nama_lengkap as owner_name,
         o.no_telepon as owner_phone,
         o.email as owner_email,
-        d.nama_lengkap as dokter_name,
-        d.spesialisasi as dokter_spesialisasi,
-        d.foto_url as dokter_foto,
-        s.nama_layanan,
-        s.durasi_estimasi,
-        s.harga as harga_layanan,
-        u_created.nama_lengkap as created_by_name,
-        u_updated.nama_lengkap as updated_by_name
+        v.nama_dokter as dokter_name,
+        v.spesialisasi as dokter_spesialisasi,
+        v.foto_url as dokter_foto
     FROM appointment a
     JOIN pet p ON a.pet_id = p.pet_id
     JOIN owner o ON a.owner_id = o.owner_id
-    JOIN dokter d ON a.dokter_id = d.dokter_id
-    JOIN service s ON a.layanan_id = s.layanan_id
-    LEFT JOIN users u_created ON a.created_by = u_created.user_id
-    LEFT JOIN users u_updated ON a.updated_by = u_updated.user_id
+    JOIN veterinarian v ON a.dokter_id = v.dokter_id
     WHERE a.appointment_id = ?
 ");
 $stmt->execute([$appointment_id]);
@@ -60,18 +52,8 @@ if (!$appointment) {
     exit;
 }
 
-// Get appointment history
-$stmt = $pdo->prepare("
-    SELECT 
-        ah.*,
-        u.nama_lengkap as performed_by_name
-    FROM appointment_history ah
-    LEFT JOIN users u ON ah.performed_by = u.user_id
-    WHERE ah.appointment_id = ?
-    ORDER BY ah.performed_at DESC
-");
-$stmt->execute([$appointment_id]);
-$history = $stmt->fetchAll();
+// Appointment history feature disabled (table not created yet)
+$history = [];
 
 // Get medical records if appointment is completed
 $medical_records = [];
@@ -79,11 +61,11 @@ if ($appointment['status'] === 'Completed') {
     $stmt = $pdo->prepare("
         SELECT 
             mr.*,
-            d.nama_lengkap as dokter_name
+            v.nama_dokter as dokter_name
         FROM medical_record mr
-        JOIN dokter d ON mr.dokter_id = d.dokter_id
+        JOIN veterinarian v ON mr.dokter_id = v.dokter_id
         WHERE mr.appointment_id = ?
-        ORDER BY mr.created_at DESC
+        ORDER BY mr.tanggal_kunjungan DESC
     ");
     $stmt->execute([$appointment_id]);
     $medical_records = $stmt->fetchAll();
@@ -156,39 +138,24 @@ include '../includes/header.php';
 
                         <p class="text-sm text-gray-600 mb-1">Tanggal & Waktu</p>
                         <p class="font-medium mb-4">
-                            <?php echo date('l, d F Y', strtotime($appointment['tanggal'])); ?><br>
-                            <?php echo date('H:i', strtotime($appointment['jam_mulai'])); ?> - 
-                            <?php echo date('H:i', strtotime($appointment['jam_selesai'])); ?> WIB
+                            <?php echo date('l, d F Y', strtotime($appointment['tanggal_appointment'])); ?><br>
+                            <?php echo date('H:i', strtotime($appointment['jam_appointment'])); ?> WIB
                         </p>
 
                         <p class="text-sm text-gray-600 mb-1">Layanan</p>
                         <p class="font-medium mb-4">
-                            <?php echo htmlspecialchars($appointment['nama_layanan']); ?><br>
-                            <span class="text-sm text-gray-600">
-                                Durasi: <?php echo $appointment['durasi_estimasi']; ?> menit
-                            </span>
+                            <?php echo htmlspecialchars($appointment['jenis_layanan']); ?>
                         </p>
                     </div>
 
-                    <!-- Created/Updated Info -->
+                    <!-- Created Info -->
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Dibuat Oleh</p>
+                        <p class="text-sm text-gray-600 mb-1">Dibuat Pada</p>
                         <p class="font-medium mb-4">
-                            <?php echo htmlspecialchars($appointment['created_by_name']); ?><br>
                             <span class="text-sm text-gray-600">
                                 <?php echo date('d/m/Y H:i', strtotime($appointment['created_at'])); ?>
                             </span>
                         </p>
-
-                        <?php if ($appointment['updated_by']): ?>
-                            <p class="text-sm text-gray-600 mb-1">Terakhir Diubah</p>
-                            <p class="font-medium mb-4">
-                                <?php echo htmlspecialchars($appointment['updated_by_name']); ?><br>
-                                <span class="text-sm text-gray-600">
-                                    <?php echo date('d/m/Y H:i', strtotime($appointment['updated_at'])); ?>
-                                </span>
-                            </p>
-                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -354,9 +321,15 @@ include '../includes/header.php';
                 
                 <div class="flex items-start gap-4 mb-4">
                     <?php if ($appointment['pet_foto']): ?>
-                        <img src="/vetclinic/assets/images/uploads/<?php echo $appointment['pet_foto']; ?>"
+                        <?php 
+                        $pet_foto_src = (strpos($appointment['pet_foto'], 'http') === 0) 
+                            ? $appointment['pet_foto'] 
+                            : '/vetclinic/assets/images/uploads/' . $appointment['pet_foto'];
+                        ?>
+                        <img src="<?php echo $pet_foto_src; ?>"
                              alt="<?php echo htmlspecialchars($appointment['nama_hewan']); ?>"
-                             class="w-20 h-20 rounded-lg object-cover">
+                             class="w-20 h-20 rounded-lg object-cover"
+                             onerror="this.src='https://via.placeholder.com/80?text=Pet'">
                     <?php else: ?>
                         <div class="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-paw text-gray-400 text-2xl"></i>
@@ -396,9 +369,15 @@ include '../includes/header.php';
                 
                 <div class="flex items-start gap-4">
                     <?php if ($appointment['dokter_foto']): ?>
-                        <img src="/vetclinic/assets/images/uploads/<?php echo $appointment['dokter_foto']; ?>"
+                        <?php 
+                        $dokter_foto_src = (strpos($appointment['dokter_foto'], 'http') === 0) 
+                            ? $appointment['dokter_foto'] 
+                            : '/vetclinic/assets/images/uploads/' . $appointment['dokter_foto'];
+                        ?>
+                        <img src="<?php echo $dokter_foto_src; ?>"
                              alt="Dr. <?php echo htmlspecialchars($appointment['dokter_name']); ?>"
-                             class="w-20 h-20 rounded-lg object-cover">
+                             class="w-20 h-20 rounded-lg object-cover"
+                             onerror="this.src='https://via.placeholder.com/80?text=Dr'">
                     <?php else: ?>
                         <div class="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-user-md text-gray-400 text-2xl"></i>

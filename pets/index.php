@@ -4,6 +4,12 @@ require_once '../auth/check_auth.php';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
+// Pet management is restricted to staff only (not Owner role)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'Owner') {
+    header('Location: /owners/portal/');
+    exit();
+}
+
 $page_title = 'Daftar Hewan';
 
 // Get current page
@@ -143,9 +149,16 @@ include '../includes/header.php';
                     </p>
                 </div>
                 <?php if ($pet['foto_url']): ?>
-                    <img src="/vetclinic/assets/images/uploads/<?php echo $pet['foto_url']; ?>" 
+                    <?php 
+                    // Check if foto_url is external URL or local path
+                    $foto_src = (strpos($pet['foto_url'], 'http') === 0) 
+                        ? $pet['foto_url'] 
+                        : '/vetclinic/assets/images/uploads/' . $pet['foto_url'];
+                    ?>
+                    <img src="<?php echo $foto_src; ?>" 
                          alt="<?php echo htmlspecialchars($pet['nama_hewan']); ?>"
-                         class="w-20 h-20 rounded-full object-cover">
+                         class="w-20 h-20 rounded-full object-cover"
+                         onerror="this.src='https://via.placeholder.com/80?text=Pet'">
                 <?php endif; ?>
             </div>
 

@@ -4,6 +4,12 @@ require_once '../auth/check_auth.php';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
+// Owner management is restricted to staff only (not Owner role)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'Owner') {
+    header('Location: /owners/portal/');
+    exit();
+}
+
 $page_title = 'Daftar Pemilik Hewan';
 
 // Get current page

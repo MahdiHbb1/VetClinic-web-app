@@ -9,7 +9,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Get supplier ID from URL
 $supplier_id = $_GET['id'] ?? null;
@@ -19,67 +19,77 @@ if (!$supplier_id) {
     exit;
 }
 
-// Fetch supplier details with joins
+// Fetch veterinarian details (supplier is actually veterinarian table)
 $stmt = $pdo->prepare("
     SELECT 
-        s.*,
-        u.nama as created_by_name,
-        u2.nama as updated_by_name
-    FROM supplier s
-    LEFT JOIN users u ON s.created_by = u.user_id
-    LEFT JOIN users u2 ON s.updated_by = u2.user_id
-    WHERE s.supplier_id = ?
+        dokter_id as supplier_id,
+        nama_dokter as nama_supplier,
+        no_lisensi,
+        spesialisasi,
+        no_telepon as kontak,
+        email,
+        jadwal_praktek,
+        status,
+        foto_url,
+        tanggal_bergabung,
+        tanggal_bergabung as created_at,
+        NULL as updated_at,
+        '' as alamat,
+        NULL as npwp,
+        NULL as notes,
+        NULL as bank_name,
+        NULL as bank_account,
+        NULL as bank_account_name,
+        'System' as created_by_name,
+        NULL as updated_by_name
+    FROM veterinarian
+    WHERE dokter_id = ?
 ");
 
 $stmt->execute([$supplier_id]);
 $supplier = $stmt->fetch();
 
 if (!$supplier) {
-    $_SESSION['error'] = "Supplier tidak ditemukan";
+    $_SESSION['error'] = "Dokter hewan tidak ditemukan";
     header("Location: index.php");
     exit;
 }
 
-// Fetch recent items from this supplier
+// Note: Medicine table uses pharmaceutical company names as suppliers
+// Veterinarian records don't have direct medicine links
+// This section shows if veterinarian name was used as supplier
 $stmt = $pdo->prepare("
     SELECT 
-        i.*,
-        k.nama_kategori
-    FROM inventory i
-    LEFT JOIN kategori k ON i.kategori_id = k.kategori_id
-    WHERE i.supplier_id = ?
-    ORDER BY i.nama_item
+        obat_id as item_id,
+        CONCAT('MED-', LPAD(obat_id, 5, '0')) as kode_item,
+        nama_obat as nama_item,
+        kategori as nama_kategori,
+        stok as current_stock,
+        satuan,
+        CASE 
+            WHEN stok = 0 THEN 'Out of Stock'
+            WHEN stok < 10 THEN 'Low Stock'
+            ELSE 'In Stock'
+        END as status
+    FROM medicine
+    WHERE supplier = ?
+    ORDER BY nama_obat
     LIMIT 5
 ");
-$stmt->execute([$supplier_id]);
+$stmt->execute([$supplier['nama_supplier']]);
 $items = $stmt->fetchAll();
 
 // Count total items
 $stmt = $pdo->prepare("
     SELECT COUNT(*) 
-    FROM inventory 
-    WHERE supplier_id = ?
+    FROM medicine 
+    WHERE supplier = ?
 ");
-$stmt->execute([$supplier_id]);
+$stmt->execute([$supplier['nama_supplier']]);
 $total_items = $stmt->fetchColumn();
 
-// Get recent stock movements
-$stmt = $pdo->prepare("
-    SELECT 
-        sm.*,
-        i.nama_item,
-        i.kode_item,
-        i.satuan,
-        u.nama as created_by_name
-    FROM stock_movement sm
-    JOIN inventory i ON sm.item_id = i.item_id
-    LEFT JOIN users u ON sm.created_by = u.user_id
-    WHERE i.supplier_id = ?
-    ORDER BY sm.created_at DESC
-    LIMIT 10
-");
-$stmt->execute([$supplier_id]);
-$stock_movements = $stmt->fetchAll();
+// Stock movements not available in this system
+$stock_movements = [];
 
 $page_title = "Detail Supplier: " . $supplier['nama_supplier'];
 
@@ -185,13 +195,13 @@ include '../includes/header.php';
                     <div class="flex items-center text-sm text-gray-600">
                         <i class="far fa-clock mr-1"></i>
                         Dibuat: <?php echo date('d/m/Y H:i', strtotime($supplier['created_at'])); ?>
-                        oleh <?php echo htmlspecialchars($supplier['created_by_name']); ?>
+                        oleh <?php echo htmlspecialchars($supplier['created_by_name'] ?? 'System'); ?>
                     </div>
                     <?php if ($supplier['updated_at']): ?>
                         <div class="flex items-center text-sm text-gray-600 mt-1">
                             <i class="far fa-edit mr-1"></i>
                             Diperbarui: <?php echo date('d/m/Y H:i', strtotime($supplier['updated_at'])); ?>
-                            oleh <?php echo htmlspecialchars($supplier['updated_by_name']); ?>
+                            oleh <?php echo htmlspecialchars($supplier['updated_by_name'] ?? 'System'); ?>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -203,7 +213,7 @@ include '../includes/header.php';
             <h3 class="text-lg font-semibold text-gray-800 mb-4">Informasi Bank</h3>
             
             <div class="space-y-4">
-                <?php if ($supplier['bank_name'] || $supplier['bank_account'] || $supplier['bank_account_name']): ?>
+                <?php if (($supplier['bank_name'] ?? null) || ($supplier['bank_account'] ?? null) || ($supplier['bank_account_name'] ?? null)): ?>
                     <?php if ($supplier['bank_name']): ?>
                         <div>
                             <label class="text-sm text-gray-600">Nama Bank</label>
@@ -245,9 +255,9 @@ include '../includes/header.php';
                 </h3>
                 
                 <?php if (in_array($_SESSION['role'], ['Admin', 'Inventory'])): ?>
-                    <a href="../inventory/create.php?supplier_id=<?php echo $supplier['supplier_id']; ?>" 
+                    <a href="../inventory/create.php?supplier=<?php echo urlencode($supplier['nama_supplier']); ?>" 
                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg inline-flex items-center">
-                        <i class="fas fa-plus mr-2"></i> Tambah Item
+                        <i class="fas fa-plus mr-2"></i> Tambah Obat
                     </a>
                 <?php endif; ?>
             </div>
@@ -268,18 +278,18 @@ include '../includes/header.php';
                         <tbody class="divide-y divide-gray-200">
                             <?php foreach ($items as $item): ?>
                                 <tr>
-                                    <td class="px-4 py-2 text-sm">
+                                    <td class="px-4 py-2 text-sm text-gray-900">
                                         <?php echo htmlspecialchars($item['kode_item']); ?>
                                     </td>
-                                    <td class="px-4 py-2">
+                                    <td class="px-4 py-2 text-gray-900">
                                         <div class="font-medium text-gray-900">
                                             <?php echo htmlspecialchars($item['nama_item']); ?>
                                         </div>
                                     </td>
-                                    <td class="px-4 py-2 text-sm">
+                                    <td class="px-4 py-2 text-sm text-gray-900">
                                         <?php echo htmlspecialchars($item['nama_kategori']); ?>
                                     </td>
-                                    <td class="px-4 py-2 text-sm">
+                                    <td class="px-4 py-2 text-sm text-gray-900">
                                         <?php echo number_format($item['current_stock']); ?> 
                                         <?php echo htmlspecialchars($item['satuan']); ?>
                                     </td>
@@ -296,7 +306,7 @@ include '../includes/header.php';
                                             <?php echo $item['status']; ?>
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2">
+                                    <td class="px-4 py-2 text-gray-900">
                                         <a href="../inventory/detail.php?id=<?php echo $item['item_id']; ?>" 
                                            class="text-blue-500 hover:text-blue-600">
                                             Detail
@@ -310,9 +320,9 @@ include '../includes/header.php';
 
                 <?php if ($total_items > 5): ?>
                     <div class="mt-4 text-center">
-                        <a href="../inventory/index.php?supplier_id=<?php echo $supplier['supplier_id']; ?>" 
+                        <a href="../inventory/index.php?supplier=<?php echo urlencode($supplier['nama_supplier']); ?>" 
                            class="text-blue-500 hover:text-blue-600">
-                            Lihat semua <?php echo number_format($total_items); ?> item
+                            Lihat semua <?php echo number_format($total_items); ?> obat
                         </a>
                     </div>
                 <?php endif; ?>

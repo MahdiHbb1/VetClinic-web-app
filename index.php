@@ -3,9 +3,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// If already logged in, redirect based on role
 if (isset($_SESSION['user_id'])) {
-    header("Location: /dashboard/");
+    if ($_SESSION['role'] === 'Owner') {
+        header("Location: /owners/portal/");
+    } else {
+        header("Location: /dashboard/");
+    }
 } else {
-    header("Location: /auth/login.php");
+    // Show landing page
+    header("Location: /landing.php");
 }
 exit;

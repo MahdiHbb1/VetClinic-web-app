@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Check role authorization
 if (!in_array($_SESSION['role'], ['Admin', 'Inventory'])) {
@@ -27,18 +27,23 @@ if (!$item_id) {
     exit;
 }
 
-// Fetch item details
+// Fetch item details from medicine table
 $stmt = $pdo->prepare("
     SELECT 
-        i.*,
-        k.nama_kategori,
-        s.nama_supplier,
-        s.supplier_id,
-        s.kontak as supplier_kontak
-    FROM inventory i
-    LEFT JOIN kategori k ON i.kategori_id = k.kategori_id
-    LEFT JOIN supplier s ON i.supplier_id = s.supplier_id
-    WHERE i.item_id = ?
+        obat_id as item_id,
+        nama_obat as nama_item,
+        kategori as nama_kategori,
+        satuan,
+        stok as current_stock,
+        harga_beli,
+        supplier as supplier_id,
+        supplier as nama_supplier,
+        NULL as supplier_kontak,
+        expired_date,
+        NULL as batch_number,
+        10 as min_stock
+    FROM medicine
+    WHERE obat_id = ?
 ");
 
 $stmt->execute([$item_id]);
@@ -87,50 +92,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Update inventory current stock and price
+            // Update medicine stock and price
             $new_stock = $item['current_stock'] + $data['quantity'];
             
             $stmt = $pdo->prepare("
-                UPDATE inventory 
-                SET current_stock = ?,
+                UPDATE medicine 
+                SET stok = ?,
                     harga_beli = ?,
-                    batch_number = ?,
                     expired_date = ?,
-                    supplier_id = ?,
-                    status = CASE 
-                        WHEN ? <= min_stock THEN 'Low Stock'
-                        ELSE 'In Stock'
-                    END,
-                    updated_by = ?,
-                    updated_at = NOW()
-                WHERE item_id = ?
+                    supplier = ?,
+                    status_tersedia = 1
+                WHERE obat_id = ?
             ");
 
             $stmt->execute([
                 $new_stock,
                 $data['harga_beli'],
-                $data['batch_number'],
                 $data['expired_date'],
                 $data['supplier_id'],
-                $new_stock,
-                $_SESSION['user_id'],
                 $item_id
             ]);
 
-            // Create stock movement record
-            create_stock_movement($pdo, [
-                'item_id' => $item_id,
-                'type' => 'IN',
-                'quantity' => $data['quantity'],
-                'previous_stock' => $item['current_stock'],
-                'current_stock' => $new_stock,
-                'supplier_id' => $data['supplier_id'],
-                'batch_number' => $data['batch_number'],
-                'expired_date' => $data['expired_date'],
-                'invoice_number' => $data['invoice_number'],
-                'notes' => $data['notes'],
-                'reference_type' => 'PURCHASE'
-            ]);
+            // Stock movement tracking removed - table doesn't exist
 
             $pdo->commit();
             $_SESSION['success'] = "Stok berhasil ditambahkan";

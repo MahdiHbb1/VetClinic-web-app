@@ -9,7 +9,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Check role authorization
 if (!in_array($_SESSION['role'], ['Admin', 'Inventory'])) {
@@ -18,78 +18,71 @@ if (!in_array($_SESSION['role'], ['Admin', 'Inventory'])) {
     exit;
 }
 
-$page_title = "Tambah Supplier";
+$page_title = "Tambah Dokter Hewan";
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
-        'nama_supplier' => $_POST['nama_supplier'] ?? '',
-        'kontak' => $_POST['kontak'] ?? '',
+        'nama_dokter' => $_POST['nama_dokter'] ?? '',
+        'no_lisensi' => $_POST['no_lisensi'] ?? '',
+        'spesialisasi' => $_POST['spesialisasi'] ?? 'Umum',
+        'no_telepon' => $_POST['no_telepon'] ?? '',
         'email' => $_POST['email'] ?? '',
-        'alamat' => $_POST['alamat'] ?? '',
-        'npwp' => $_POST['npwp'] ?? '',
-        'bank_name' => $_POST['bank_name'] ?? '',
-        'bank_account' => $_POST['bank_account'] ?? '',
-        'bank_account_name' => $_POST['bank_account_name'] ?? '',
-        'notes' => $_POST['notes'] ?? '',
-        'status' => 'Active'
+        'jadwal_praktek' => $_POST['jadwal_praktek'] ?? '',
+        'tanggal_bergabung' => $_POST['tanggal_bergabung'] ?? date('Y-m-d'),
+        'status' => 'Aktif'
     ];
 
     // Validate input
     $errors = [];
     
-    if (empty($data['nama_supplier'])) {
-        $errors[] = "Nama supplier harus diisi";
+    if (empty($data['nama_dokter'])) {
+        $errors[] = "Nama dokter harus diisi";
     }
 
-    if (empty($data['kontak']) && empty($data['email'])) {
-        $errors[] = "Minimal salah satu dari kontak atau email harus diisi";
+    if (empty($data['no_telepon'])) {
+        $errors[] = "Nomor telepon harus diisi";
     }
 
     if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
         $errors[] = "Format email tidak valid";
     }
 
-    // Validate unique supplier name
-    if (!empty($data['nama_supplier'])) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM supplier WHERE nama_supplier = ?");
-        $stmt->execute([$data['nama_supplier']]);
+    // Validate unique license number
+    if (!empty($data['no_lisensi'])) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM veterinarian WHERE no_lisensi = ?");
+        $stmt->execute([$data['no_lisensi']]);
         if ($stmt->fetchColumn() > 0) {
-            $errors[] = "Nama supplier sudah digunakan";
+            $errors[] = "Nomor lisensi sudah digunakan";
         }
     }
 
     if (empty($errors)) {
         try {
             $stmt = $pdo->prepare("
-                INSERT INTO supplier (
-                    nama_supplier, kontak, email, 
-                    alamat, npwp, bank_name,
-                    bank_account, bank_account_name, notes,
-                    status, created_by, created_at
+                INSERT INTO veterinarian (
+                    nama_dokter, no_lisensi, spesialisasi,
+                    no_telepon, email, jadwal_praktek,
+                    tanggal_bergabung, status
                 ) VALUES (
-                    ?, ?, ?, 
                     ?, ?, ?,
                     ?, ?, ?,
-                    ?, ?, NOW()
+                    ?, ?
                 )
             ");
 
             $stmt->execute([
-                $data['nama_supplier'],
-                $data['kontak'],
+                $data['nama_dokter'],
+                $data['no_lisensi'],
+                $data['spesialisasi'],
+                $data['no_telepon'],
                 $data['email'],
-                $data['alamat'],
-                $data['npwp'],
-                $data['bank_name'],
-                $data['bank_account'],
-                $data['bank_account_name'],
-                $data['notes'],
-                $data['status'],
-                $_SESSION['user_id']
+                $data['jadwal_praktek'],
+                $data['tanggal_bergabung'],
+                $data['status']
             ]);
 
-            $_SESSION['success'] = "Supplier berhasil ditambahkan";
+            $_SESSION['success'] = "Dokter hewan berhasil ditambahkan";
             header("Location: index.php");
             exit;
 

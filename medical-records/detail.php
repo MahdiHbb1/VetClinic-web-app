@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Detail Rekam Medis";
 
@@ -35,18 +35,8 @@ if (!$record) {
 // Get attachments
 $attachments = get_medical_record_attachments($pdo, $record_id);
 
-// Get history
-$stmt = $pdo->prepare("
-    SELECT 
-        h.*,
-        u.nama_lengkap as performed_by_name
-    FROM medical_record_history h
-    LEFT JOIN users u ON h.performed_by = u.user_id
-    WHERE h.record_id = ?
-    ORDER BY h.performed_at DESC
-");
-$stmt->execute([$record_id]);
-$history = $stmt->fetchAll();
+// History feature disabled (table not created yet)
+$history = [];
 
 include '../includes/header.php';
 ?>
@@ -277,9 +267,15 @@ include '../includes/header.php';
                 
                 <div class="flex items-start gap-4 mb-4">
                     <?php if ($record['pet_foto']): ?>
-                        <img src="/vetclinic/assets/images/uploads/<?php echo $record['pet_foto']; ?>"
+                        <?php 
+                        $rec_pet_foto_src = (strpos($record['pet_foto'], 'http') === 0) 
+                            ? $record['pet_foto'] 
+                            : '/vetclinic/assets/images/uploads/' . $record['pet_foto'];
+                        ?>
+                        <img src="<?php echo $rec_pet_foto_src; ?>"
                              alt="<?php echo htmlspecialchars($record['nama_hewan']); ?>"
-                             class="w-20 h-20 rounded-lg object-cover">
+                             class="w-20 h-20 rounded-lg object-cover"
+                             onerror="this.src='https://via.placeholder.com/80?text=Pet'">
                     <?php else: ?>
                         <div class="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-paw text-gray-400 text-2xl"></i>
@@ -319,9 +315,15 @@ include '../includes/header.php';
                 
                 <div class="flex items-start gap-4">
                     <?php if ($record['dokter_foto']): ?>
-                        <img src="/vetclinic/assets/images/uploads/<?php echo $record['dokter_foto']; ?>"
+                        <?php 
+                        $rec_dokter_foto_src = (strpos($record['dokter_foto'], 'http') === 0) 
+                            ? $record['dokter_foto'] 
+                            : '/vetclinic/assets/images/uploads/' . $record['dokter_foto'];
+                        ?>
+                        <img src="<?php echo $rec_dokter_foto_src; ?>"
                              alt="Dr. <?php echo htmlspecialchars($record['dokter_name']); ?>"
-                             class="w-20 h-20 rounded-lg object-cover">
+                             class="w-20 h-20 rounded-lg object-cover"
+                             onerror="this.src='https://via.placeholder.com/80?text=Dr'">
                     <?php else: ?>
                         <div class="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-user-md text-gray-400 text-2xl"></i>

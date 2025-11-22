@@ -3,6 +3,13 @@ session_start();
 require_once '../auth/check_auth.php';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/appointment_functions.php';
+
+// Dashboard is restricted to staff only (not Owner)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'Owner') {
+    header('Location: /owners/portal/');
+    exit();
+}
 
 $page_title = 'Dashboard';
 $use_chart = true;
@@ -10,12 +17,20 @@ $use_chart = true;
 // Get today's appointments
 $today = date('Y-m-d');
 $stmt = $pdo->prepare("
-    SELECT a.*, o.nama_lengkap as owner_name, p.nama_hewan as pet_name, v.nama_dokter
+    SELECT 
+        a.appointment_id,
+        a.tanggal_appointment,
+        a.jam_appointment,
+        a.status,
+        a.jenis_layanan,
+        o.nama_lengkap as owner_name, 
+        p.nama_hewan as pet_name, 
+        v.nama_dokter
     FROM appointment a 
     JOIN owner o ON a.owner_id = o.owner_id
     JOIN pet p ON a.pet_id = p.pet_id
     JOIN veterinarian v ON a.dokter_id = v.dokter_id
-    WHERE DATE(a.tanggal_appointment) = ?
+    WHERE a.tanggal_appointment = ?
     ORDER BY a.jam_appointment ASC
 ");
 $stmt->execute([$today]);
@@ -160,14 +175,14 @@ include '../includes/header.php';
                             </thead>
                             <tbody class="divide-y divide-gray-200">
                                 <?php foreach ($appointments as $appt): ?>
-                                <tr>
-                                    <td class="px-4 py-2"><?php echo date('H:i', strtotime($appt['jam_appointment'])); ?></td>
-                                    <td class="px-4 py-2"><?php echo htmlspecialchars($appt['owner_name']); ?></td>
-                                    <td class="px-4 py-2"><?php echo htmlspecialchars($appt['pet_name']); ?></td>
-                                    <td class="px-4 py-2"><?php echo htmlspecialchars($appt['nama_dokter']); ?></td>
-                                    <td class="px-4 py-2"><?php echo get_status_badge($appt['status']); ?></td>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-2 text-gray-900"><?php echo date('H:i', strtotime($appt['jam_appointment'])); ?></td>
+                                    <td class="px-4 py-2 text-gray-900"><?php echo htmlspecialchars($appt['owner_name']); ?></td>
+                                    <td class="px-4 py-2 text-gray-900"><?php echo htmlspecialchars($appt['pet_name']); ?></td>
+                                    <td class="px-4 py-2 text-gray-900"><?php echo htmlspecialchars($appt['nama_dokter']); ?></td>
+                                    <td class="px-4 py-2"><?php echo get_appointment_status_badge($appt['status']); ?></td>
                                     <td class="px-4 py-2">
-                                        <a href="/appointments/detail.php?id=<?php echo $appt['appointment_id']; ?>" 
+                                        <a href="../appointments/detail.php?id=<?php echo $appt['appointment_id']; ?>" 
                                            class="text-blue-600 hover:text-blue-800">
                                             <i class="fas fa-eye"></i> Detail
                                         </a>
@@ -258,11 +273,63 @@ include '../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Comprehensive checks before initializing chart
+    const chartCanvas = document.getElementById('revenueChart');
+    
+    // Check if canvas element exists
+    if (!chartCanvas) {
+        console.warn('Revenue chart canvas not found in DOM');
+        return;
+    }
+    
+    // Check if Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded!');
+        const parent = chartCanvas.parentElement;
+        if (parent) {
+            parent.innerHTML = '<div class="text-red-600 text-center p-4">Chart.js gagal dimuat. Silakan refresh halaman.</div>';
+        }
+        return;
+    }
+    
+    // Destroy existing chart instance if any
+    const existingChart = Chart.getChart(chartCanvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
     // Fetch revenue data and initialize chart
-    fetch('/vetclinic/api/dashboard_stats.php?type=revenue')
-        .then(response => response.json())
+    fetch('../api/dashboard_stats.php?type=revenue')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.statusText);
+            }
+            return response.json();
+        })
         .then(data => {
-            const ctx = document.getElementById('revenueChart').getContext('2d');
+            console.log('Revenue data received:', data);
+            
+            // Verify canvas still exists after async fetch
+            const canvas = document.getElementById('revenueChart');
+            if (!canvas) {
+                console.warn('Canvas element disappeared during data fetch');
+                return;
+            }
+            
+            if (!data.months || !data.values || data.months.length === 0) {
+                const parent = canvas.parentElement;
+                if (parent) {
+                    parent.innerHTML = '<div class="text-gray-600 text-center p-4">Tidak ada data pendapatan untuk ditampilkan.</div>';
+                }
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error('Cannot get 2D context from canvas');
+                return;
+            }
+            
             new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -277,6 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -289,6 +357,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             });
+        })
+        .catch(error => {
+            console.error('Error loading chart data:', error);
+            const canvas = document.getElementById('revenueChart');
+            if (canvas && canvas.parentElement) {
+                canvas.parentElement.innerHTML = 
+                    '<div class="text-red-600 text-center p-4">' +
+                    '<i class="fas fa-exclamation-triangle mb-2"></i><br>' +
+                    'Gagal memuat data grafik: ' + error.message + 
+                    '</div>';
+            }
         });
 });
 </script>

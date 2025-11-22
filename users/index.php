@@ -132,13 +132,13 @@ include '../includes/header.php';
                 <?php else: ?>
                     <?php foreach ($users as $user): ?>
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-900">
                                 <?php echo htmlspecialchars($user['username']); ?>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-gray-900">
                                 <?php echo htmlspecialchars($user['nama_lengkap']); ?>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-gray-900">
                                 <?php echo htmlspecialchars($user['email']); ?>
                             </td>
                             <td class="px-6 py-4">

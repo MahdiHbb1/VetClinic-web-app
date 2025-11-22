@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Get item ID from URL
 $item_id = $_GET['id'] ?? null;
@@ -20,21 +20,35 @@ if (!$item_id) {
     exit;
 }
 
-// Fetch item details with joins
+// Fetch item details from medicine table
 $stmt = $pdo->prepare("
     SELECT 
-        i.*,
-        k.nama_kategori,
-        s.nama_supplier,
-        s.kontak as supplier_kontak,
-        u.nama as created_by_name,
-        u2.nama as updated_by_name
-    FROM inventory i
-    LEFT JOIN kategori k ON i.kategori_id = k.kategori_id
-    LEFT JOIN supplier s ON i.supplier_id = s.supplier_id
-    LEFT JOIN users u ON i.created_by = u.user_id
-    LEFT JOIN users u2 ON i.updated_by = u2.user_id
-    WHERE i.item_id = ?
+        obat_id as item_id,
+        nama_obat as nama_item,
+        kategori,
+        bentuk_sediaan,
+        satuan,
+        stok as current_stock,
+        harga_beli,
+        harga_jual,
+        expired_date,
+        supplier,
+        deskripsi,
+        status_tersedia,
+        kategori as nama_kategori,
+        supplier as nama_supplier,
+        NULL as supplier_id,
+        NULL as supplier_kontak,
+        NULL as created_by_name,
+        NULL as updated_by_name,
+        CURRENT_TIMESTAMP as created_at,
+        CURRENT_TIMESTAMP as updated_at,
+        CONCAT('MED-', LPAD(obat_id, 5, '0')) as kode_item,
+        NULL as batch_number,
+        NULL as lokasi,
+        10 as min_stock
+    FROM medicine
+    WHERE obat_id = ?
 ");
 
 $stmt->execute([$item_id]);
@@ -46,19 +60,8 @@ if (!$item) {
     exit;
 }
 
-// Get stock movement history
-$stmt = $pdo->prepare("
-    SELECT 
-        sm.*,
-        u.nama as created_by_name
-    FROM stock_movement sm
-    LEFT JOIN users u ON sm.created_by = u.user_id
-    WHERE sm.item_id = ?
-    ORDER BY sm.created_at DESC
-    LIMIT 10
-");
-$stmt->execute([$item_id]);
-$stock_movements = $stmt->fetchAll();
+// Stock movement history not available - table doesn't exist
+$stock_movements = [];
 
 $page_title = "Detail Item: " . $item['nama_item'];
 
@@ -108,27 +111,23 @@ include '../includes/header.php';
             <div class="space-y-4">
                 <div>
                     <label class="text-sm text-gray-600">Kode Item</label>
-                    <p class="font-medium"><?php echo htmlspecialchars($item['kode_item']); ?></p>
+                    <p class="font-medium"><?php echo htmlspecialchars($item['kode_item'] ?? 'N/A'); ?></p>
                 </div>
                 
                 <div>
                     <label class="text-sm text-gray-600">Kategori</label>
-                    <p class="font-medium"><?php echo htmlspecialchars($item['nama_kategori']); ?></p>
+                    <p class="font-medium"><?php echo htmlspecialchars($item['nama_kategori'] ?? 'Tidak ada kategori'); ?></p>
                 </div>
 
                 <div>
                     <label class="text-sm text-gray-600">Status</label>
                     <p>
                         <?php
-                        $statusClass = match($item['status']) {
-                            'In Stock' => 'bg-green-100 text-green-800',
-                            'Low Stock' => 'bg-yellow-100 text-yellow-800',
-                            'Out of Stock' => 'bg-red-100 text-red-800',
-                            default => 'bg-gray-100 text-gray-800'
-                        };
+                        $status_text = $item['status_tersedia'] ? 'Tersedia' : 'Tidak Tersedia';
+                        $statusClass = $item['status_tersedia'] ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
                         ?>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
-                            <?php echo htmlspecialchars($item['status']); ?>
+                            <?php echo $status_text; ?>
                         </span>
                     </p>
                 </div>
@@ -212,12 +211,12 @@ include '../includes/header.php';
                     <p class="font-medium">Rp <?php echo number_format($item['harga_jual'], 0, ',', '.'); ?></p>
                 </div>
 
-                <?php if ($item['supplier_id']): ?>
+                <?php if (!empty($item['nama_supplier'])): ?>
                     <div>
                         <label class="text-sm text-gray-600">Supplier</label>
                         <p class="font-medium">
                             <?php echo htmlspecialchars($item['nama_supplier']); ?>
-                            <?php if ($item['supplier_kontak']): ?>
+                            <?php if (!empty($item['supplier_kontak'])): ?>
                                 <br>
                                 <span class="text-sm text-gray-600">
                                     <?php echo htmlspecialchars($item['supplier_kontak']); ?>
@@ -228,16 +227,22 @@ include '../includes/header.php';
                 <?php endif; ?>
 
                 <div class="pt-4 border-t border-gray-200">
-                    <div class="flex items-center text-sm text-gray-600">
-                        <i class="far fa-clock mr-1"></i>
-                        Dibuat: <?php echo date('d/m/Y H:i', strtotime($item['created_at'])); ?>
-                        oleh <?php echo htmlspecialchars($item['created_by_name']); ?>
-                    </div>
-                    <?php if ($item['updated_at']): ?>
+                    <?php if (!empty($item['created_at'])): ?>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="far fa-clock mr-1"></i>
+                            Dibuat: <?php echo date('d/m/Y H:i', strtotime($item['created_at'])); ?>
+                            <?php if (!empty($item['created_by_name'])): ?>
+                                oleh <?php echo htmlspecialchars($item['created_by_name']); ?>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($item['updated_at']) && $item['updated_at'] != $item['created_at']): ?>
                         <div class="flex items-center text-sm text-gray-600 mt-1">
                             <i class="far fa-edit mr-1"></i>
                             Diperbarui: <?php echo date('d/m/Y H:i', strtotime($item['updated_at'])); ?>
-                            oleh <?php echo htmlspecialchars($item['updated_by_name']); ?>
+                            <?php if (!empty($item['updated_by_name'])): ?>
+                                oleh <?php echo htmlspecialchars($item['updated_by_name']); ?>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
                 </div>

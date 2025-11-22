@@ -9,7 +9,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Detail Kategori";
 
@@ -22,31 +22,32 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 
 $kategori_id = (int)$_GET['id'];
 
-// Fetch category details with usage counts and audit info
+// Fetch service details (kategori uses service table)
 try {
     $stmt = $pdo->prepare("
         SELECT 
-            k.*,
-            COUNT(DISTINCT i.item_id) as total_inventory,
-            COUNT(DISTINCT s.service_id) as total_service,
-            COUNT(DISTINCT m.medicine_id) as total_medicine,
-            u1.nama as created_by_name,
-            u2.nama as updated_by_name
-        FROM kategori k
-        LEFT JOIN inventory i ON k.kategori_id = i.kategori_id
-        LEFT JOIN service s ON k.kategori_id = s.kategori_id
-        LEFT JOIN medicine m ON k.kategori_id = m.kategori_id
-        LEFT JOIN users u1 ON k.created_by = u1.user_id
-        LEFT JOIN users u2 ON k.updated_by = u2.user_id
-        WHERE k.kategori_id = ?
-        GROUP BY k.kategori_id
+            layanan_id as kategori_id,
+            nama_layanan as nama_kategori,
+            kategori as tipe,
+            deskripsi,
+            harga,
+            durasi_estimasi,
+            CASE WHEN status_tersedia = 1 THEN 'Active' ELSE 'Inactive' END as status,
+            status_tersedia,
+            0 as total_inventory,
+            0 as total_service,
+            0 as total_medicine,
+            NULL as created_by_name,
+            NULL as updated_by_name
+        FROM service
+        WHERE layanan_id = ?
     ");
     
     $stmt->execute([$kategori_id]);
     $category = $stmt->fetch();
 
     if (!$category) {
-        throw new Exception("Kategori tidak ditemukan!");
+        throw new Exception("Layanan tidak ditemukan!");
     }
 
 } catch (Exception $e) {
@@ -298,9 +299,9 @@ include '../includes/header.php';
                                         </td>
                                         <td class="px-4 py-2 text-sm text-gray-500">
                                             <?php 
-                                            if ($item['updated_at']) {
+                                            if (isset($item['updated_at']) && $item['updated_at']) {
                                                 echo date('d/m/Y H:i', strtotime($item['updated_at']));
-                                                if ($item['updated_by_name']) {
+                                                if (isset($item['updated_by_name']) && $item['updated_by_name']) {
                                                     echo ' oleh ' . htmlspecialchars($item['updated_by_name']);
                                                 }
                                             } else {
@@ -326,27 +327,31 @@ include '../includes/header.php';
 
         <!-- Audit Information -->
         <div class="lg:col-span-1">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4">Informasi Audit</h2>
+            <div class="bg-blue-500 rounded-lg shadow-md p-6">
+                <h2 class="text-lg font-semibold text-white mb-4">Informasi Audit</h2>
                 
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Dibuat Oleh</label>
-                        <p class="mt-1 text-gray-900">
-                            <?php echo htmlspecialchars($category['created_by_name']); ?>
+                        <label class="block text-sm font-medium text-blue-100">Dibuat Oleh</label>
+                        <p class="mt-1 text-white font-medium">
+                            <?php echo htmlspecialchars($category['created_by_name'] ?? 'System'); ?>
                         </p>
-                        <p class="text-sm text-gray-500">
+                        <?php if (!empty($category['created_at'])): ?>
+                        <p class="text-sm text-blue-100">
                             <?php echo date('d/m/Y H:i', strtotime($category['created_at'])); ?>
                         </p>
+                        <?php else: ?>
+                        <p class="text-sm text-blue-100">-</p>
+                        <?php endif; ?>
                     </div>
 
-                    <?php if ($category['updated_at']): ?>
+                    <?php if (!empty($category['updated_at'])): ?>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Terakhir Diupdate</label>
-                            <p class="mt-1 text-gray-900">
-                                <?php echo htmlspecialchars($category['updated_by_name']); ?>
+                            <label class="block text-sm font-medium text-blue-100">Terakhir Diupdate</label>
+                            <p class="mt-1 text-white font-medium">
+                                <?php echo htmlspecialchars($category['updated_by_name'] ?? 'System'); ?>
                             </p>
-                            <p class="text-sm text-gray-500">
+                            <p class="text-sm text-blue-100">
                                 <?php echo date('d/m/Y H:i', strtotime($category['updated_at'])); ?>
                             </p>
                         </div>

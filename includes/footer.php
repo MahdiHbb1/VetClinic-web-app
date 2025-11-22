@@ -13,10 +13,14 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <!-- Custom JavaScript -->
-    <script src="/vetclinic/assets/js/main.js"></script>
+    <script src="/assets/js/enhanced-ui.js"></script>
+    <script src="/assets/js/main.js"></script>
     
-    <?php if (isset($use_chart)): ?>
-    <script src="/vetclinic/assets/js/charts.js"></script>
+    <!-- SPA Router - Load after other scripts -->
+    <script src="/assets/js/spa-router.js"></script>
+    
+    <?php if (isset($use_chart) && $use_chart === true): ?>
+    <script src="/assets/js/charts.js"></script>
     <?php endif; ?>
 
     <script>

@@ -53,6 +53,52 @@ function upload_image($file, $target_dir) {
     return false;
 }
 
+// Handle file upload (modern version)
+function handle_file_upload($file, $module = 'general') {
+    // Check if file was uploaded
+    if (!isset($file['tmp_name']) || empty($file['tmp_name'])) {
+        return false;
+    }
+    
+    // Check for upload errors
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return false;
+    }
+    
+    // Validate file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
+        return false;
+    }
+    
+    // Check file size (max 5MB)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        return false;
+    }
+    
+    // Create upload directory if it doesn't exist
+    $upload_dir = __DIR__ . '/../assets/images/uploads/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $new_filename = $module . '_' . uniqid() . '_' . time() . '.' . $extension;
+    $target_path = $upload_dir . $new_filename;
+    
+    // Move uploaded file
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        return $new_filename;
+    }
+    
+    return false;
+}
+
 // Pagination
 function paginate($total_records, $records_per_page, $current_page) {
     $total_pages = ceil($total_records / $records_per_page);

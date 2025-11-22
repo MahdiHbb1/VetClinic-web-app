@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Check role authorization
 if (!in_array($_SESSION['role'], ['Admin', 'Inventory'])) {
@@ -27,17 +27,23 @@ if (!$item_id) {
     exit;
 }
 
-// Fetch item details
+// Fetch item details from medicine table
 $stmt = $pdo->prepare("
     SELECT 
-        i.*,
-        k.nama_kategori,
-        s.nama_supplier,
-        s.kontak as supplier_kontak
-    FROM inventory i
-    LEFT JOIN kategori k ON i.kategori_id = k.kategori_id
-    LEFT JOIN supplier s ON i.supplier_id = s.supplier_id
-    WHERE i.item_id = ?
+        obat_id as item_id,
+        nama_obat as nama_item,
+        kategori,
+        bentuk_sediaan,
+        satuan,
+        stok as current_stock,
+        harga_beli,
+        harga_jual,
+        expired_date,
+        supplier as supplier_id,
+        deskripsi,
+        status_tersedia
+    FROM medicine
+    WHERE obat_id = ?
 ");
 
 $stmt->execute([$item_id]);
@@ -52,29 +58,26 @@ if (!$item) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
-        'kode_item' => $_POST['kode_item'] ?? '',
         'nama_item' => $_POST['nama_item'] ?? '',
         'kategori_id' => $_POST['kategori_id'] ?? '',
+        'bentuk_sediaan' => $_POST['bentuk_sediaan'] ?? 'Tablet',
         'supplier_id' => $_POST['supplier_id'] ?? null,
         'deskripsi' => $_POST['deskripsi'] ?? '',
-        'min_stock' => $_POST['min_stock'] ? (int)$_POST['min_stock'] : 0,
         'satuan' => $_POST['satuan'] ?? '',
         'harga_beli' => $_POST['harga_beli'] ? str_replace(['.', ','], '', $_POST['harga_beli']) : 0,
         'harga_jual' => $_POST['harga_jual'] ? str_replace(['.', ','], '', $_POST['harga_jual']) : 0,
-        'batch_number' => $_POST['batch_number'] ?? null,
-        'expired_date' => $_POST['expired_date'] ?? null,
-        'lokasi' => $_POST['lokasi'] ?? ''
+        'expired_date' => $_POST['expired_date'] ?? null
     ];
 
     // Validate input
     $errors = validate_inventory_item($data);
 
-    // Validate unique kode_item
-    if ($data['kode_item'] !== $item['kode_item']) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM inventory WHERE kode_item = ? AND item_id != ?");
-        $stmt->execute([$data['kode_item'], $item_id]);
+    // Validate unique nama_obat
+    if ($data['nama_item'] !== $item['nama_item']) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM medicine WHERE nama_obat = ? AND obat_id != ?");
+        $stmt->execute([$data['nama_item'], $item_id]);
         if ($stmt->fetchColumn() > 0) {
-            $errors[] = "Kode item sudah digunakan";
+            $errors[] = "Nama obat sudah digunakan";
         }
     }
 
@@ -82,46 +85,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Update inventory item
+            // Update medicine item
             $stmt = $pdo->prepare("
-                UPDATE inventory SET
-                    kode_item = ?,
-                    nama_item = ?,
-                    kategori_id = ?,
-                    supplier_id = ?,
-                    deskripsi = ?,
-                    min_stock = ?,
+                UPDATE medicine SET
+                    nama_obat = ?,
+                    kategori = ?,
+                    bentuk_sediaan = ?,
                     satuan = ?,
                     harga_beli = ?,
                     harga_jual = ?,
-                    batch_number = ?,
                     expired_date = ?,
-                    lokasi = ?,
-                    status = CASE 
-                        WHEN current_stock = 0 THEN 'Out of Stock'
-                        WHEN current_stock <= ? THEN 'Low Stock'
-                        ELSE 'In Stock'
-                    END,
-                    updated_by = ?,
-                    updated_at = NOW()
-                WHERE item_id = ?
+                    supplier = ?,
+                    deskripsi = ?,
+                    status_tersedia = CASE 
+                        WHEN stok = 0 THEN 0
+                        ELSE 1
+                    END
+                WHERE obat_id = ?
             ");
 
             $stmt->execute([
-                $data['kode_item'],
                 $data['nama_item'],
                 $data['kategori_id'],
-                $data['supplier_id'],
-                $data['deskripsi'],
-                $data['min_stock'],
+                $data['bentuk_sediaan'],
                 $data['satuan'],
                 $data['harga_beli'],
                 $data['harga_jual'],
-                $data['batch_number'],
                 $data['expired_date'],
-                $data['lokasi'],
-                $data['min_stock'],
-                $_SESSION['user_id'],
+                $data['supplier_id'],
+                $data['deskripsi'],
                 $item_id
             ]);
 
@@ -137,22 +129,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get categories
-$stmt = $pdo->prepare("
-    SELECT kategori_id, nama_kategori
-    FROM kategori 
-    WHERE tipe = 'Inventory'
-    ORDER BY nama_kategori
-");
-$stmt->execute();
-$categories = $stmt->fetchAll();
+// Categories are ENUM values in medicine table
+$categories = [
+    ['value' => 'Antibiotik', 'label' => 'Antibiotik'],
+    ['value' => 'Vitamin', 'label' => 'Vitamin'],
+    ['value' => 'Vaksin', 'label' => 'Vaksin'],
+    ['value' => 'Anti_Parasit', 'label' => 'Anti Parasit'],
+    ['value' => 'Suplemen', 'label' => 'Suplemen'],
+    ['value' => 'Alat_Medis', 'label' => 'Alat Medis'],
+    ['value' => 'Lainnya', 'label' => 'Lainnya']
+];
 
-// Get suppliers
+// Bentuk sediaan are ENUM values
+$bentuk_sediaan_options = [
+    'Tablet', 'Kapsul', 'Sirup', 'Injeksi', 'Salep', 'Tetes', 'Lainnya'
+];
+
+// Get suppliers from medicine table
 $stmt = $pdo->prepare("
-    SELECT supplier_id, nama_supplier, kontak
-    FROM supplier
-    WHERE status = 'Active'
-    ORDER BY nama_supplier
+    SELECT DISTINCT supplier
+    FROM medicine
+    WHERE supplier IS NOT NULL AND supplier != ''
+    ORDER BY supplier
 ");
 $stmt->execute();
 $suppliers = $stmt->fetchAll();
@@ -188,18 +186,9 @@ include '../includes/header.php';
     <form action="" method="POST" class="bg-white rounded-lg shadow-md p-6">
         <!-- Basic Info -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Kode Item <span class="text-red-600">*</span>
-                </label>
-                <input type="text" name="kode_item" required
-                       value="<?php echo htmlspecialchars($item['kode_item']); ?>"
-                       class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
-            </div>
-
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Nama Item <span class="text-red-600">*</span>
+                    Nama Obat <span class="text-red-600">*</span>
                 </label>
                 <input type="text" name="nama_item" required
                        value="<?php echo htmlspecialchars($item['nama_item']); ?>"
@@ -214,9 +203,25 @@ include '../includes/header.php';
                         class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
                     <option value="">Pilih Kategori</option>
                     <?php foreach ($categories as $category): ?>
-                        <option value="<?php echo $category['kategori_id']; ?>"
-                                <?php echo $item['kategori_id'] == $category['kategori_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($category['nama_kategori']); ?>
+                        <option value="<?php echo $category['value']; ?>"
+                                <?php echo $item['kategori'] == $category['value'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($category['label']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Bentuk Sediaan <span class="text-red-600">*</span>
+                </label>
+                <select name="bentuk_sediaan" required
+                        class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
+                    <option value="">Pilih Bentuk Sediaan</option>
+                    <?php foreach ($bentuk_sediaan_options as $bentuk): ?>
+                        <option value="<?php echo $bentuk; ?>"
+                                <?php echo $item['bentuk_sediaan'] == $bentuk ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($bentuk); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -226,34 +231,20 @@ include '../includes/header.php';
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                     Supplier
                 </label>
-                <select name="supplier_id"
-                        class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
-                    <option value="">Pilih Supplier</option>
-                    <?php foreach ($suppliers as $supplier): ?>
-                        <option value="<?php echo $supplier['supplier_id']; ?>"
-                                <?php echo $item['supplier_id'] == $supplier['supplier_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($supplier['nama_supplier']); ?>
-                            <?php if ($supplier['kontak']): ?>
-                                (<?php echo htmlspecialchars($supplier['kontak']); ?>)
-                            <?php endif; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Lokasi Penyimpanan
-                </label>
-                <input type="text" name="lokasi"
-                       value="<?php echo htmlspecialchars($item['lokasi']); ?>"
+                <input type="text" name="supplier_id" list="suppliers_list"
+                       value="<?php echo htmlspecialchars($item['supplier_id'] ?? ''); ?>"
                        class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200"
-                       placeholder="Rak/Gudang/Lemari...">
+                       placeholder="Nama supplier...">
+                <datalist id="suppliers_list">
+                    <?php foreach ($suppliers as $supplier): ?>
+                        <option value="<?php echo htmlspecialchars($supplier['supplier']); ?>">
+                    <?php endforeach; ?>
+                </datalist>
             </div>
         </div>
 
         <!-- Stock Info -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                     Stok Saat Ini
@@ -269,15 +260,6 @@ include '../includes/header.php';
                 <p class="mt-1 text-sm text-gray-500">
                     Gunakan fitur Stok Masuk/Keluar untuk mengubah stok
                 </p>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Minimum Stok <span class="text-red-600">*</span>
-                </label>
-                <input type="number" name="min_stock" required min="0"
-                       value="<?php echo $item['min_stock']; ?>"
-                       class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
             </div>
 
             <div>
@@ -301,16 +283,17 @@ include '../includes/header.php';
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Batch Number
+                    Tanggal Kadaluarsa
                 </label>
-                <input type="text" name="batch_number"
-                       value="<?php echo htmlspecialchars($item['batch_number']); ?>"
+                <input type="date" name="expired_date"
+                       value="<?php echo $item['expired_date']; ?>"
+                       min="<?php echo date('Y-m-d'); ?>"
                        class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
             </div>
         </div>
 
         <!-- Price Info -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                     Harga Beli
@@ -339,16 +322,6 @@ include '../includes/header.php';
                            class="w-full pl-12 rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200"
                            oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')">
                 </div>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Tanggal Kadaluarsa
-                </label>
-                <input type="date" name="expired_date"
-                       value="<?php echo $item['expired_date']; ?>"
-                       min="<?php echo date('Y-m-d'); ?>"
-                       class="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200">
             </div>
         </div>
 

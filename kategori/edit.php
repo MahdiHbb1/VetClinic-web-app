@@ -16,7 +16,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Edit Kategori";
 
@@ -29,26 +29,25 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 
 $kategori_id = (int)$_GET['id'];
 
-// Fetch category details
+// Fetch service details
 try {
     $stmt = $pdo->prepare("
-        SELECT k.*, 
-               COUNT(DISTINCT i.item_id) as total_inventory,
-               COUNT(DISTINCT s.service_id) as total_service,
-               COUNT(DISTINCT m.medicine_id) as total_medicine
-        FROM kategori k
-        LEFT JOIN inventory i ON k.kategori_id = i.kategori_id
-        LEFT JOIN service s ON k.kategori_id = s.kategori_id
-        LEFT JOIN medicine m ON k.kategori_id = m.kategori_id
-        WHERE k.kategori_id = ?
-        GROUP BY k.kategori_id
+        SELECT layanan_id as kategori_id,
+               nama_layanan as nama_kategori,
+               kategori as tipe,
+               deskripsi,
+               harga,
+               durasi_estimasi,
+               status_tersedia as status
+        FROM service
+        WHERE layanan_id = ?
     ");
     
     $stmt->execute([$kategori_id]);
     $category = $stmt->fetch();
 
     if (!$category) {
-        throw new Exception("Kategori tidak ditemukan!");
+        throw new Exception("Layanan tidak ditemukan!");
     }
 
 } catch (Exception $e) {
@@ -69,66 +68,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Validate status
-        if (!in_array($_POST['status'], ['Active', 'Inactive'])) {
-            throw new Exception("Status tidak valid!");
+        $status_tersedia = $_POST['status'] === 'Active' ? 1 : 0;
+        
+        // Validate kategori enum
+        $valid_categories = ['Pemeriksaan', 'Vaksinasi', 'Grooming', 'Bedah', 'Rawat_Inap', 'Tes_Lab', 'Emergency'];
+        if (!empty($_POST['kategori']) && !in_array($_POST['kategori'], $valid_categories)) {
+            throw new Exception("Kategori tidak valid!");
         }
 
-        // Check if category name already exists for the same type (excluding current category)
+        // Validate harga and durasi
+        $harga = filter_var($_POST['harga'] ?? 0, FILTER_VALIDATE_FLOAT);
+        $durasi_estimasi = filter_var($_POST['durasi_estimasi'] ?? 0, FILTER_VALIDATE_INT);
+        
+        if ($harga === false || $harga < 0) {
+            throw new Exception("Harga tidak valid!");
+        }
+
+        // Update service
         $stmt = $pdo->prepare("
-            SELECT COUNT(*) 
-            FROM kategori 
-            WHERE nama_kategori = ? 
-            AND tipe = ? 
-            AND kategori_id != ?
+            UPDATE service 
+            SET nama_layanan = ?,
+                kategori = ?,
+                harga = ?,
+                durasi_estimasi = ?,
+                deskripsi = ?,
+                status_tersedia = ?
+            WHERE layanan_id = ?
         ");
+        
         $stmt->execute([
-            $_POST['nama_kategori'],
-            $category['tipe'],
+            trim($_POST['nama_kategori']),
+            $_POST['kategori'] ?? $category['tipe'],
+            $harga,
+            $durasi_estimasi,
+            trim($_POST['deskripsi'] ?? ''),
+            $status_tersedia,
             $kategori_id
         ]);
         
-        if ($stmt->fetchColumn() > 0) {
-            throw new Exception("Nama kategori sudah ada untuk tipe yang dipilih!");
-        }
-
-        // Check if trying to deactivate category that's in use
-        if ($_POST['status'] === 'Inactive') {
-            $total_items = match($category['tipe']) {
-                'Inventory' => $category['total_inventory'],
-                'Service' => $category['total_service'],
-                'Medicine' => $category['total_medicine'],
-                default => 0
-            };
-
-            if ($total_items > 0) {
-                throw new Exception("Tidak dapat menonaktifkan kategori yang sedang digunakan!");
-            }
-        }
-
-        // Prepare data
-        $data = [
-            'nama_kategori' => trim($_POST['nama_kategori']),
-            'deskripsi' => trim($_POST['deskripsi'] ?? ''),
-            'status' => $_POST['status'],
-            'updated_by' => $_SESSION['user_id'],
-            'updated_at' => date('Y-m-d H:i:s'),
-            'kategori_id' => $kategori_id
-        ];
-
-        // Update category
-        $stmt = $pdo->prepare("
-            UPDATE kategori 
-            SET nama_kategori = :nama_kategori,
-                deskripsi = :deskripsi,
-                status = :status,
-                updated_by = :updated_by,
-                updated_at = :updated_at
-            WHERE kategori_id = :kategori_id
-        ");
-        
-        $stmt->execute($data);
-        
-        $_SESSION['success'] = "Kategori berhasil diupdate!";
+        $_SESSION['success'] = "Layanan berhasil diupdate!";
         header("Location: detail.php?id=" . $kategori_id);
         exit;
         

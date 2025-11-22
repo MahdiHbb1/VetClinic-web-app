@@ -1,0 +1,175 @@
+<?php
+/**
+ * Owner Portal Helper Functions
+ */
+
+/**
+ * Generate secure password for new owner
+ */
+function generateOwnerPassword($length = 12) {
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*';
+    $password = '';
+    $max = strlen($characters) - 1;
+    for ($i = 0; $i < $length; $i++) {
+        $password .= $characters[random_int(0, $max)];
+    }
+    return $password;
+}
+
+/**
+ * Create user account for existing owner
+ */
+function createOwnerUserAccount($pdo, $owner_id) {
+    try {
+        // Get owner details
+        $stmt = $pdo->prepare("SELECT * FROM owner WHERE owner_id = ?");
+        $stmt->execute([$owner_id]);
+        $owner = $stmt->fetch();
+        
+        if (!$owner) {
+            return ['success' => false, 'message' => 'Owner not found'];
+        }
+        
+        // Check if user already exists
+        if ($owner['user_id']) {
+            return ['success' => false, 'message' => 'User account already exists'];
+        }
+        
+        // Generate username from email
+        $username = strtolower(explode('@', $owner['email'])[0]);
+        $original_username = $username;
+        $counter = 1;
+        
+        // Ensure unique username
+        while (true) {
+            $check = $pdo->prepare("SELECT user_id FROM users WHERE username = ?");
+            $check->execute([$username]);
+            if ($check->rowCount() == 0) break;
+            $username = $original_username . $counter++;
+        }
+        
+        // Generate temporary password
+        $temp_password = generateOwnerPassword(10);
+        $hashed_password = password_hash($temp_password, PASSWORD_BCRYPT);
+        
+        // Create user account
+        $stmt = $pdo->prepare("
+            INSERT INTO users (username, password, nama_lengkap, email, role, status)
+            VALUES (?, ?, ?, ?, 'Owner', 'Aktif')
+        ");
+        $stmt->execute([
+            $username,
+            $hashed_password,
+            $owner['nama_lengkap'],
+            $owner['email']
+        ]);
+        
+        $user_id = $pdo->lastInsertId();
+        
+        // Link user to owner
+        $stmt = $pdo->prepare("UPDATE owner SET user_id = ? WHERE owner_id = ?");
+        $stmt->execute([$user_id, $owner_id]);
+        
+        return [
+            'success' => true,
+            'username' => $username,
+            'password' => $temp_password,
+            'user_id' => $user_id
+        ];
+        
+    } catch (PDOException $e) {
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+/**
+ * Get all pets for an owner with health summary
+ */
+function getOwnerPetsWithHealth($pdo, $owner_id) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            p.*,
+            TIMESTAMPDIFF(YEAR, p.tanggal_lahir, CURDATE()) as umur_tahun,
+            TIMESTAMPDIFF(MONTH, p.tanggal_lahir, CURDATE()) % 12 as umur_bulan,
+            (SELECT COUNT(*) FROM appointment WHERE pet_id = p.pet_id) as total_appointments,
+            (SELECT COUNT(*) FROM vaksinasi WHERE pet_id = p.pet_id) as total_vaccinations,
+            (SELECT tanggal_appointment FROM appointment 
+             WHERE pet_id = p.pet_id AND status IN ('Scheduled', 'Confirmed') 
+             AND tanggal_appointment >= CURDATE()
+             ORDER BY tanggal_appointment ASC LIMIT 1) as next_appointment,
+            (SELECT tanggal_vaksin_berikutnya FROM vaksinasi 
+             WHERE pet_id = p.pet_id 
+             ORDER BY tanggal_vaksin DESC LIMIT 1) as next_vaccination,
+            (SELECT mr.tanggal_kunjungan FROM medical_record mr
+             WHERE mr.pet_id = p.pet_id
+             ORDER BY mr.tanggal_kunjungan DESC LIMIT 1) as last_checkup
+        FROM pet p
+        WHERE p.owner_id = ?
+        ORDER BY p.tanggal_registrasi DESC
+    ");
+    $stmt->execute([$owner_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Get pet health status badge
+ */
+function getPetHealthStatus($pet) {
+    $today = new DateTime();
+    
+    // Check vaccination status
+    if ($pet['next_vaccination']) {
+        $next_vac = new DateTime($pet['next_vaccination']);
+        if ($next_vac < $today) {
+            return ['status' => 'overdue', 'label' => 'Vaccination Overdue', 'class' => 'bg-red-100 text-red-800'];
+        } elseif ($next_vac->diff($today)->days <= 7) {
+            return ['status' => 'due_soon', 'label' => 'Vaccination Due Soon', 'class' => 'bg-yellow-100 text-yellow-800'];
+        }
+    }
+    
+    // Check if had recent checkup
+    if ($pet['last_checkup']) {
+        $last_check = new DateTime($pet['last_checkup']);
+        $months_since = $today->diff($last_check)->m + ($today->diff($last_check)->y * 12);
+        
+        if ($months_since <= 3) {
+            return ['status' => 'healthy', 'label' => 'Up to Date', 'class' => 'bg-green-100 text-green-800'];
+        }
+    }
+    
+    return ['status' => 'checkup_due', 'label' => 'Checkup Recommended', 'class' => 'bg-blue-100 text-blue-800'];
+}
+
+/**
+ * Get vaccination progress percentage
+ */
+function getVaccinationProgress($pdo, $pet_id) {
+    // Basic vaccines for dogs/cats (adjust as needed)
+    $required_vaccines = ['Rabies', 'Distemper', 'Parvovirus', 'FVRCP'];
+    
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT jenis_vaksin 
+        FROM vaksinasi 
+        WHERE pet_id = ?
+    ");
+    $stmt->execute([$pet_id]);
+    $completed = $stmt->rowCount();
+    
+    $total = count($required_vaccines);
+    return min(100, ($completed / $total) * 100);
+}
+
+/**
+ * Format Indonesian date
+ */
+function formatIndonesianDate($date) {
+    if (!$date) return '-';
+    $months = [
+        1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr',
+        5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu',
+        9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'
+    ];
+    $d = new DateTime($date);
+    return $d->format('d') . ' ' . $months[(int)$d->format('m')] . ' ' . $d->format('Y');
+}
+?>

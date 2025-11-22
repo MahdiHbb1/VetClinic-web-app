@@ -114,17 +114,17 @@ include '../includes/header.php';
                     <div>
                         <h3 class="text-lg font-semibold mb-3">Statistik</h3>
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-blue-50 p-4 rounded-lg">
-                                <p class="text-sm text-blue-600">Total Hewan</p>
-                                <p class="text-2xl font-bold text-blue-700"><?php echo $owner['total_pets']; ?></p>
+                            <div class="bg-blue-500 p-4 rounded-lg">
+                                <p class="text-sm text-blue-100">Total Hewan</p>
+                                <p class="text-2xl font-bold text-white"><?php echo $owner['total_pets']; ?></p>
                             </div>
-                            <div class="bg-green-50 p-4 rounded-lg">
-                                <p class="text-sm text-green-600">Total Kunjungan</p>
-                                <p class="text-2xl font-bold text-green-700"><?php echo $owner['total_appointments']; ?></p>
+                            <div class="bg-blue-500 p-4 rounded-lg">
+                                <p class="text-sm text-blue-100">Total Kunjungan</p>
+                                <p class="text-2xl font-bold text-white"><?php echo $owner['total_appointments']; ?></p>
                             </div>
-                            <div class="bg-purple-50 p-4 rounded-lg col-span-2">
-                                <p class="text-sm text-purple-600">Total Pembayaran</p>
-                                <p class="text-2xl font-bold text-purple-700"><?php echo format_rupiah($owner['total_revenue'] ?? 0); ?></p>
+                            <div class="bg-blue-500 p-4 rounded-lg col-span-2">
+                                <p class="text-sm text-blue-100">Total Pembayaran</p>
+                                <p class="text-2xl font-bold text-white"><?php echo format_rupiah($owner['total_revenue'] ?? 0); ?></p>
                             </div>
                         </div>
                     </div>
@@ -169,9 +169,15 @@ include '../includes/header.php';
                                         </p>
                                     </div>
                                     <?php if ($pet['foto_url']): ?>
-                                        <img src="/vetclinic/assets/images/uploads/<?php echo $pet['foto_url']; ?>" 
+                                        <?php 
+                                        $pet_foto = (strpos($pet['foto_url'], 'http') === 0) 
+                                            ? $pet['foto_url'] 
+                                            : '/vetclinic/assets/images/uploads/' . $pet['foto_url'];
+                                        ?>
+                                        <img src="<?php echo $pet_foto; ?>" 
                                              alt="<?php echo htmlspecialchars($pet['nama_hewan']); ?>"
-                                             class="w-16 h-16 rounded-full object-cover">
+                                             class="w-16 h-16 rounded-full object-cover"
+                                             onerror="this.src='https://via.placeholder.com/64?text=Pet'">
                                     <?php endif; ?>
                                 </div>
                                 <div class="mt-2 flex gap-4 text-sm">

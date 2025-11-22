@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Check role authorization
 if (!in_array($_SESSION['role'], ['Admin', 'Inventory'])) {
@@ -36,9 +36,9 @@ if (!$item_id) {
 
 // Fetch item details to verify it exists and has no stock
 $stmt = $pdo->prepare("
-    SELECT item_id, nama_item, current_stock
-    FROM inventory 
-    WHERE item_id = ?
+    SELECT obat_id as item_id, nama_obat as nama_item, stok as current_stock
+    FROM medicine 
+    WHERE obat_id = ?
 ");
 $stmt->execute([$item_id]);
 $item = $stmt->fetch();
@@ -59,40 +59,16 @@ if ($item['current_stock'] > 0) {
 try {
     $pdo->beginTransaction();
 
-    // Check if item is used in any transactions or treatments
+    // Medicine table doesn't track usage history, so we can mark as unavailable
+    // Mark item as unavailable instead of deleting
     $stmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM stock_movement 
-        WHERE item_id = ? 
-        AND reference_type IN ('TREATMENT', 'TRANSACTION')
+        UPDATE medicine 
+        SET status_tersedia = 0
+        WHERE obat_id = ?
     ");
     $stmt->execute([$item_id]);
-    $usageCount = $stmt->fetchColumn();
-
-    if ($usageCount > 0) {
-        // If item is used, just mark it as inactive
-        $stmt = $pdo->prepare("
-            UPDATE inventory 
-            SET status = 'Inactive',
-                updated_by = ?,
-                updated_at = NOW()
-            WHERE item_id = ?
-        ");
-        $stmt->execute([$_SESSION['user_id'], $item_id]);
-        
-        $_SESSION['success'] = "Item telah dinonaktifkan karena memiliki riwayat penggunaan";
-    } else {
-        // If item is never used, we can safely delete it and its stock movements
-        // Delete stock movements first
-        $stmt = $pdo->prepare("DELETE FROM stock_movement WHERE item_id = ?");
-        $stmt->execute([$item_id]);
-
-        // Then delete the item
-        $stmt = $pdo->prepare("DELETE FROM inventory WHERE item_id = ?");
-        $stmt->execute([$item_id]);
-
-        $_SESSION['success'] = "Item berhasil dihapus";
-    }
+    
+    $_SESSION['success'] = "Item telah dinonaktifkan";
 
     $pdo->commit();
     header("Location: index.php");

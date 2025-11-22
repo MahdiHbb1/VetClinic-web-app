@@ -14,12 +14,116 @@
     <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet">
     
-    <!-- Custom CSS -->
-    <link href="/assets/css/style.css" rel="stylesheet">
+    <!-- Custom Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <?php if (isset($use_chart)): ?>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- Custom CSS -->
+    <?php $css_version = '2025.11.23'; ?>
+    <link href="/assets/css/style.css?v=<?= $css_version ?>" rel="stylesheet">
+    <link href="/assets/css/enhanced-ui.css?v=<?= $css_version ?>" rel="stylesheet">
+    <link href="/assets/css/tailwind-enhancements.css?v=<?= $css_version ?>" rel="stylesheet">
+    
+    <!-- SPA Router CSS -->
+    <style>
+        /* SPA Loading state */
+        .spa-loading {
+            cursor: wait;
+        }
+        
+        .spa-loading * {
+            pointer-events: none;
+        }
+        
+        /* Smooth content transitions */
+        main {
+            transition: opacity 200ms ease;
+        }
+        
+        /* Loading spinner improvements */
+        #loadingSpinner {
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+        }
+        
+        #loadingSpinner .spinner-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        /* Prefetch link hint */
+        a[href]:hover {
+            cursor: pointer;
+        }
+        
+        /* Progress bar for page loading */
+        .spa-progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            z-index: 10000;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        
+        /* Skeleton loader for content area */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Dark mode compatibility for SPA elements */
+        [data-theme="dark"] #loadingSpinner {
+            background-color: rgba(26, 32, 44, 0.95);
+        }
+        
+        [data-theme="dark"] #loadingSpinner .spinner-container {
+            background-color: #2d3748;
+            color: #e2e8f0;
+        }
+        
+        [data-theme="dark"] .spa-progress-bar {
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+        }
+    </style>
+    
+    <!-- Critical Styles - Logout Button -->
+    <style>
+        #sidebar .logout-button {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.4) !important;
+            text-decoration: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        #sidebar .logout-button:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.5) !important;
+            transform: translateY(-2px) scale(1.02) !important;
+        }
+        #sidebar .logout-button * {
+            color: #ffffff !important;
+        }
+    </style>
+    
+    <?php if (isset($use_chart) && $use_chart === true): ?>
+    <!-- Chart.js v4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <?php endif; ?>
     
     <style>
@@ -51,8 +155,14 @@
 <body class="bg-gray-100">
     <!-- Loading Spinner -->
     <div id="loadingSpinner" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        <div class="spinner-container">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+            <p class="text-gray-700 mt-4 text-center font-medium">Memuat...</p>
+        </div>
     </div>
+    
+    <!-- Progress Bar -->
+    <div id="spaProgressBar" class="spa-progress-bar" style="width: 0%;"></div>
 
     <!-- Include Sidebar -->
     <?php include '../includes/sidebar.php'; ?>
@@ -103,19 +213,21 @@
                         
                         <!-- User Dropdown -->
                         <div class="relative">
-                            <button id="userMenuButton" class="flex items-center space-x-2">
-                                <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['nama_lengkap']); ?>&background=random" alt="Profile">
-                                <span class="hidden md:inline-block text-gray-700"><?php echo $_SESSION['nama_lengkap']; ?></span>
-                                <i class="fas fa-chevron-down text-gray-500"></i>
+                            <button id="userMenuButton" class="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+                                <img class="h-8 w-8 rounded-full ring-2 ring-gray-200" src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['nama_lengkap']); ?>&background=random" alt="">
+                                <span class="hidden md:inline-block text-gray-700 font-medium"><?php echo $_SESSION['nama_lengkap']; ?></span>
+                                <i class="fas fa-chevron-down text-gray-500 text-xs"></i>
                             </button>
                             
                             <!-- Dropdown Menu -->
-                            <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                                <a href="/users/profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                    <i class="fas fa-user mr-2"></i> Profil
+                            <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                                <a href="/users/profile.php" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                                    <i class="fas fa-user mr-3"></i>
+                                    <span>My Profile</span>
                                 </a>
-                                <a href="/auth/logout.php" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                                <a href="../auth/logout.php" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                    <i class="fas fa-sign-out-alt mr-3"></i>
+                                    <span>Logout</span>
                                 </a>
                             </div>
                         </div>

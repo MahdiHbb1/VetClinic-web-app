@@ -3,6 +3,7 @@ session_start();
 require_once '../auth/check_auth.php';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/appointment_functions.php';
 
 $page_title = 'Detail Hewan';
 
@@ -45,11 +46,11 @@ if (!$pet) {
 $vac_stmt = $pdo->prepare("
     SELECT 
         v.*,
-        d.nama_lengkap as dokter_name
+        vet.nama_dokter as dokter_name
     FROM vaksinasi v
-    LEFT JOIN dokter d ON v.dokter_id = d.dokter_id
+    LEFT JOIN veterinarian vet ON v.dokter_id = vet.dokter_id
     WHERE v.pet_id = ?
-    ORDER BY v.tanggal_vaksinasi DESC
+    ORDER BY v.tanggal_vaksin DESC
 ");
 $vac_stmt->execute([$pet_id]);
 $vaccinations = $vac_stmt->fetchAll();
@@ -58,11 +59,11 @@ $vaccinations = $vac_stmt->fetchAll();
 $app_stmt = $pdo->prepare("
     SELECT 
         a.*,
-        d.nama_lengkap as dokter_name
+        vet.nama_dokter as dokter_name
     FROM appointment a
-    LEFT JOIN dokter d ON a.dokter_id = d.dokter_id
+    LEFT JOIN veterinarian vet ON a.dokter_id = vet.dokter_id
     WHERE a.pet_id = ?
-    ORDER BY a.tanggal DESC
+    ORDER BY a.tanggal_appointment DESC
 ");
 $app_stmt->execute([$pet_id]);
 $appointments = $app_stmt->fetchAll();
@@ -91,9 +92,16 @@ include '../includes/header.php';
                     <!-- Photo Section -->
                     <div class="w-full md:w-1/3">
                         <?php if ($pet['foto_url']): ?>
-                            <img src="/vetclinic/assets/images/uploads/<?php echo $pet['foto_url']; ?>"
+                            <?php 
+                            // Check if foto_url is external URL or local path
+                            $foto_src = (strpos($pet['foto_url'], 'http') === 0) 
+                                ? $pet['foto_url'] 
+                                : '/vetclinic/assets/images/uploads/' . $pet['foto_url'];
+                            ?>
+                            <img src="<?php echo $foto_src; ?>"
                                  alt="<?php echo htmlspecialchars($pet['nama_hewan']); ?>"
-                                 class="w-full h-64 object-cover rounded-lg shadow-md">
+                                 class="w-full h-64 object-cover rounded-lg shadow-md"
+                                 onerror="this.src='https://via.placeholder.com/400x300?text=Pet+Photo'">
                         <?php else: ?>
                             <div class="w-full h-64 bg-gray-200 rounded-lg flex items-center justify-center">
                                 <i class="fas fa-paw text-gray-400 text-5xl"></i>
@@ -146,11 +154,11 @@ include '../includes/header.php';
                             </div>
                         </div>
 
-                        <?php if ($pet['catatan']): ?>
+                        <?php if (!empty($pet['ciri_khusus'])): ?>
                             <div class="mb-4">
-                                <h4 class="text-gray-500 mb-2">Catatan</h4>
+                                <h4 class="text-gray-500 mb-2">Ciri Khusus</h4>
                                 <p class="text-gray-800 bg-gray-50 p-3 rounded-lg">
-                                    <?php echo nl2br(htmlspecialchars($pet['catatan'])); ?>
+                                    <?php echo nl2br(htmlspecialchars($pet['ciri_khusus'])); ?>
                                 </p>
                             </div>
                         <?php endif; ?>
@@ -215,7 +223,7 @@ include '../includes/header.php';
                                 <?php foreach ($vaccinations as $vac): ?>
                                     <tr class="border-b hover:bg-gray-50">
                                         <td class="py-2">
-                                            <?php echo date('d/m/Y', strtotime($vac['tanggal_vaksinasi'])); ?>
+                                            <?php echo date('d/m/Y', strtotime($vac['tanggal_vaksin'])); ?>
                                         </td>
                                         <td class="py-2">
                                             <?php echo htmlspecialchars($vac['jenis_vaksin']); ?>
@@ -261,10 +269,10 @@ include '../includes/header.php';
                                 <?php foreach ($appointments as $app): ?>
                                     <tr class="border-b hover:bg-gray-50">
                                         <td class="py-2">
-                                            <?php echo date('d/m/Y', strtotime($app['tanggal'])); ?>
+                                            <?php echo date('d/m/Y', strtotime($app['tanggal_appointment'])); ?>
                                         </td>
                                         <td class="py-2">
-                                            <?php echo htmlspecialchars($app['keluhan']); ?>
+                                            <?php echo htmlspecialchars($app['keluhan_awal'] ?? '-'); ?>
                                         </td>
                                         <td class="py-2">
                                             <?php echo get_appointment_status_badge($app['status']); ?>

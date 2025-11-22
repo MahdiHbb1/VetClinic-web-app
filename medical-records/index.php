@@ -4,12 +4,18 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 require_once '../includes/medical_record_functions.php';
 
+// Medical records is restricted to staff only (not Owner role)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'Owner') {
+    header('Location: /owners/portal/');
+    exit();
+}
+
 // Security headers
 header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com data:");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Rekam Medis";
 
@@ -241,9 +247,15 @@ include '../includes/header.php';
                                 <td class="px-4 py-3">
                                     <div class="flex items-center">
                                         <?php if ($record['pet_foto']): ?>
-                                            <img src="/vetclinic/assets/images/uploads/<?php echo $record['pet_foto']; ?>"
+                                            <?php 
+                                            $rec_pet_foto = (strpos($record['pet_foto'], 'http') === 0) 
+                                                ? $record['pet_foto'] 
+                                                : '/vetclinic/assets/images/uploads/' . $record['pet_foto'];
+                                            ?>
+                                            <img src="<?php echo $rec_pet_foto; ?>"
                                                  alt="<?php echo htmlspecialchars($record['nama_hewan']); ?>"
-                                                 class="w-8 h-8 rounded-full object-cover mr-3">
+                                                 class="w-8 h-8 rounded-full object-cover mr-3"
+                                                 onerror="this.src='https://via.placeholder.com/32?text=P'">
                                         <?php else: ?>
                                             <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3">
                                                 <i class="fas fa-paw text-gray-400"></i>
@@ -262,7 +274,7 @@ include '../includes/header.php';
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3">
+                                <td class="px-4 py-3 text-gray-900">
                                     <div class="text-sm font-medium text-gray-900">
                                         <?php echo htmlspecialchars($record['owner_name']); ?>
                                     </div>
@@ -270,7 +282,7 @@ include '../includes/header.php';
                                         <?php echo htmlspecialchars($record['owner_phone']); ?>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3">
+                                <td class="px-4 py-3 text-gray-900">
                                     <div class="text-sm font-medium text-gray-900">
                                         Dr. <?php echo htmlspecialchars($record['dokter_name']); ?>
                                     </div>
@@ -280,7 +292,7 @@ include '../includes/header.php';
                                         </div>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 py-3">
+                                <td class="px-4 py-3 text-gray-900">
                                     <div class="text-sm text-gray-900">
                                         <?php 
                                         $diagnosis = htmlspecialchars($record['diagnosa']);

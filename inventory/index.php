@@ -4,12 +4,18 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 require_once '../includes/inventory_functions.php';
 
+// Inventory management is restricted to staff only (not Owner role)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'Owner') {
+    header('Location: /owners/portal/');
+    exit();
+}
+
 // Security headers
 header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com data:");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Inventaris";
 
@@ -84,13 +90,15 @@ $stmt = $pdo->prepare("
         obat_id as inventory_id,
         nama_obat as nama_item,
         kategori,
+        bentuk_sediaan,
         stok as qty,
-        satuan as unit,
+        satuan,
         harga_beli,
         harga_jual as harga,
         expired_date,
         supplier as supplier_name,
-        status_tersedia
+        status_tersedia,
+        status_tersedia as status
     FROM medicine
     $whereClause
     ORDER BY nama_obat ASC
@@ -331,7 +339,7 @@ include '../includes/header.php';
                                 </td>
                                 <td class="px-4 py-3 text-center">
                                     <div class="text-sm font-medium text-gray-900">
-                                        <?php echo number_format($item['qty']); ?> <?php echo htmlspecialchars($item['unit']); ?>
+                                        <?php echo number_format($item['qty']); ?> <?php echo htmlspecialchars($item['satuan']); ?>
                                     </div>
                                     <div class="text-xs text-gray-500">
                                         <?php 
@@ -382,8 +390,8 @@ include '../includes/header.php';
                                            title="Edit">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <?php if ($item['status'] !== 'Discontinued'): ?>
-                                            <button onclick="confirmDelete(<?php echo $item['item_id']; ?>)"
+                                        <?php if ($item['status']): ?>
+                                            <button onclick="confirmDelete(<?php echo $item['inventory_id']; ?>)"
                                                     class="text-red-600 hover:text-red-800"
                                                     title="Hapus">
                                                 <i class="fas fa-trash"></i>

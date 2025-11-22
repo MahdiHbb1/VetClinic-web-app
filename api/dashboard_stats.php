@@ -11,12 +11,13 @@ switch ($type) {
         // Get revenue for last 6 months
         $stmt = $pdo->query("
             SELECT 
-                DATE_FORMAT(a.created_at, '%Y-%m') as month,
+                DATE_FORMAT(a.tanggal_appointment, '%Y-%m') as month,
                 SUM(al.subtotal) as total
             FROM appointment_layanan al
             JOIN appointment a ON al.appointment_id = a.appointment_id
-            WHERE a.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
-            GROUP BY DATE_FORMAT(a.created_at, '%Y-%m')
+            WHERE a.tanggal_appointment >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
+            AND a.status = 'Completed'
+            GROUP BY DATE_FORMAT(a.tanggal_appointment, '%Y-%m')
             ORDER BY month ASC
         ");
         $revenue_data = $stmt->fetchAll();

@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 // Check role authorization
 if (!in_array($_SESSION['role'], ['Admin', 'Dokter'])) {
@@ -46,13 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Insert medical record
             $stmt = $pdo->prepare("
                 INSERT INTO medical_record (
-                    pet_id, dokter_id, appointment_id, tanggal,
-                    diagnosis, tindakan, resep, catatan,
-                    biaya, status, created_by, created_at
+                    pet_id, dokter_id, appointment_id, tanggal_kunjungan,
+                    keluhan, diagnosa, tindakan, catatan_dokter,
+                    status_kunjungan
                 ) VALUES (
                     ?, ?, ?, ?,
                     ?, ?, ?, ?,
-                    ?, ?, ?, NOW()
+                    ?
                 )
             ");
 
@@ -61,13 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $data['dokter_id'],
                 $data['appointment_id'],
                 $data['tanggal'],
+                $data['keluhan'] ?? '',
                 $data['diagnosis'],
                 $data['tindakan'],
-                $data['resep'],
                 $data['catatan'],
-                $data['biaya'],
-                $data['status'],
-                $_SESSION['user_id']
+                'Pemeriksaan'
             ]);
 
             $record_id = $pdo->lastInsertId();
@@ -99,31 +97,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($data['appointment_id']) {
                 $stmt = $pdo->prepare("
                     UPDATE appointment 
-                    SET status = 'Completed',
-                        updated_by = ?,
-                        updated_at = NOW()
+                    SET status = 'Completed'
                     WHERE appointment_id = ?
                 ");
-                $stmt->execute([$_SESSION['user_id'], $data['appointment_id']]);
-
-                // Create appointment history
-                $stmt = $pdo->prepare("
-                    INSERT INTO appointment_history (
-                        appointment_id, action, old_status, new_status,
-                        notes, performed_by, performed_at
-                    ) VALUES (
-                        ?, ?, ?, ?,
-                        ?, ?, NOW()
-                    )
-                ");
-                $stmt->execute([
-                    $data['appointment_id'],
-                    'UPDATE',
-                    'Confirmed',
-                    'Completed',
-                    'Status diperbarui setelah pembuatan rekam medis',
-                    $_SESSION['user_id']
-                ]);
+                $stmt->execute([$data['appointment_id']]);
             }
 
             $pdo->commit();

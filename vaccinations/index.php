@@ -111,14 +111,14 @@ include '../includes/header.php';
     <!-- Table -->
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+            <thead class="bg-blue-500">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hewan</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pemilik</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vaksin</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Berikutnya</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Tanggal</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Hewan</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Pemilik</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Vaksin</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Tanggal Berikutnya</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase">Aksi</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -131,19 +131,19 @@ include '../includes/header.php';
                 <?php else: ?>
                     <?php foreach ($vaccinations as $vacc): ?>
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-900">
                                 <?php echo date('d/m/Y', strtotime($vacc['tanggal_vaksinasi'])); ?>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-gray-900">
                                 <?php echo htmlspecialchars($vacc['nama_hewan']); ?>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-gray-900">
                                 <?php echo htmlspecialchars($vacc['owner_name']); ?>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-gray-900">
                                 <?php echo htmlspecialchars($vacc['nama_vaksin']); ?>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-900">
                                 <?php echo $vacc['tanggal_berikutnya'] ? date('d/m/Y', strtotime($vacc['tanggal_berikutnya'])) : '-'; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">

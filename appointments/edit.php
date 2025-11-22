@@ -10,7 +10,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src cdnjs.cloudflare.com");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = 'Edit Janji Temu';
 
@@ -33,13 +33,11 @@ $stmt = $pdo->prepare("
         o.no_telepon as owner_phone,
         d.nama_lengkap as dokter_name,
         d.spesialisasi as dokter_spesialisasi,
-        s.nama_layanan,
-        s.durasi_estimasi
+        a.jenis_layanan
     FROM appointment a
     JOIN pet p ON a.pet_id = p.pet_id
     JOIN owner o ON a.owner_id = o.owner_id
     JOIN dokter d ON a.dokter_id = d.dokter_id
-    JOIN service s ON a.layanan_id = s.layanan_id
     WHERE a.appointment_id = ?
 ");
 $stmt->execute([$appointment_id]);
@@ -60,16 +58,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute();
 $doctors = $stmt->fetchAll();
-
-// Get available services
-$stmt = $pdo->prepare("
-    SELECT layanan_id, nama_layanan, durasi_estimasi, harga
-    FROM service 
-    WHERE status_tersedia = 1
-    ORDER BY nama_layanan
-");
-$stmt->execute();
-$services = $stmt->fetchAll();
 
 // Get pets with their owners
 $stmt = $pdo->prepare("
@@ -102,33 +90,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Validate and sanitize input
         $pet_id = filter_var($_POST['pet_id'], FILTER_VALIDATE_INT);
         $dokter_id = filter_var($_POST['dokter_id'], FILTER_VALIDATE_INT);
-        $layanan_id = filter_var($_POST['layanan_id'], FILTER_VALIDATE_INT);
-        $tanggal = clean_input($_POST['tanggal']);
-        $jam_mulai = clean_input($_POST['jam_mulai']);
-        $keluhan = clean_input($_POST['keluhan']);
-        $catatan = clean_input($_POST['catatan']);
+        $jenis_layanan = clean_input($_POST['jenis_layanan'] ?? 'Konsultasi Umum');
+        $tanggal_appointment = clean_input($_POST['tanggal_appointment']);
+        $jam_appointment = clean_input($_POST['jam_appointment']);
+        $keluhan_awal = clean_input($_POST['keluhan_awal']);
+        $catatan = clean_input($_POST['catatan'] ?? '');
         $status = clean_input($_POST['status']);
 
         // Validate required fields
-        if (!$pet_id || !$dokter_id || !$layanan_id || !$tanggal || !$jam_mulai || !$status) {
+        if (!$pet_id || !$dokter_id || !$tanggal_appointment || !$jam_appointment || !$status) {
             throw new Exception('Semua field wajib diisi');
         }
 
         // Validate date and time
-        if (!validate_appointment_datetime($tanggal, $jam_mulai)) {
+        if (!validate_appointment_datetime($tanggal_appointment, $jam_appointment)) {
             throw new Exception('Tanggal dan jam tidak valid');
         }
 
-        // Get service duration for end time calculation
-        $stmt = $pdo->prepare("SELECT durasi_estimasi FROM service WHERE layanan_id = ?");
-        $stmt->execute([$layanan_id]);
-        $durasi = $stmt->fetchColumn();
-        
-        // Calculate end time
-        $jam_selesai = date('H:i:s', strtotime($jam_mulai . ' + ' . $durasi . ' minutes'));
-
         // Check doctor availability (excluding current appointment)
-        if (!is_doctor_available($pdo, $dokter_id, $tanggal, $jam_mulai, $jam_selesai, $appointment_id)) {
+        if (!is_doctor_available($pdo, $dokter_id, $tanggal_appointment, $jam_appointment, null, $appointment_id)) {
             throw new Exception('Dokter tidak tersedia pada waktu yang dipilih');
         }
 
@@ -143,15 +123,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pet_id = ?,
                 owner_id = ?,
                 dokter_id = ?,
-                layanan_id = ?,
-                tanggal = ?,
-                jam_mulai = ?,
-                jam_selesai = ?,
-                keluhan = ?,
+                jenis_layanan = ?,
+                tanggal_appointment = ?,
+                jam_appointment = ?,
+                keluhan_awal = ?,
                 catatan = ?,
-                status = ?,
-                updated_at = CURRENT_TIMESTAMP,
-                updated_by = ?
+                status = ?
             WHERE appointment_id = ?
         ");
 
@@ -159,14 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pet_id,
             $owner_id,
             $dokter_id,
-            $layanan_id,
-            $tanggal,
-            $jam_mulai,
-            $jam_selesai,
-            $keluhan,
+            $jenis_layanan,
+            $tanggal_appointment,
+            $jam_appointment,
+            $keluhan_awal,
             $catatan,
             $status,
-            $_SESSION['user_id'],
             $appointment_id
         ]);
 
@@ -249,25 +224,23 @@ include '../includes/header.php';
                 <p class="mt-2 text-sm text-gray-500" id="ownerInfo"></p>
             </div>
 
-            <!-- Service Selection -->
+            <!-- Service Type -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2" for="layanan_id">
-                    Layanan <span class="text-red-500">*</span>
+                <label class="block text-sm font-medium text-gray-700 mb-2" for="jenis_layanan">
+                    Jenis Layanan <span class="text-red-500">*</span>
                 </label>
-                <select name="layanan_id" id="layanan_id" required
+                <select name="jenis_layanan" id="jenis_layanan" required
                         class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Pilih Layanan</option>
-                    <?php foreach ($services as $service): ?>
-                        <option value="<?php echo $service['layanan_id']; ?>"
-                                data-duration="<?php echo $service['durasi_estimasi']; ?>"
-                                data-price="<?php echo number_format($service['harga'], 0, ',', '.'); ?>"
-                                <?php echo $service['layanan_id'] == $appointment['layanan_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($service['nama_layanan']); ?> 
-                            (<?php echo $service['durasi_estimasi']; ?> menit)
-                        </option>
-                    <?php endforeach; ?>
+                    <option value="">Pilih Jenis Layanan</option>
+                    <option value="Konsultasi Umum" <?php echo $appointment['jenis_layanan'] === 'Konsultasi Umum' ? 'selected' : ''; ?>>Konsultasi Umum</option>
+                    <option value="Vaksinasi" <?php echo $appointment['jenis_layanan'] === 'Vaksinasi' ? 'selected' : ''; ?>>Vaksinasi</option>
+                    <option value="Grooming" <?php echo $appointment['jenis_layanan'] === 'Grooming' ? 'selected' : ''; ?>>Grooming</option>
+                    <option value="Operasi" <?php echo $appointment['jenis_layanan'] === 'Operasi' ? 'selected' : ''; ?>>Operasi</option>
+                    <option value="Perawatan Gigi" <?php echo $appointment['jenis_layanan'] === 'Perawatan Gigi' ? 'selected' : ''; ?>>Perawatan Gigi</option>
+                    <option value="Pemeriksaan Rutin" <?php echo $appointment['jenis_layanan'] === 'Pemeriksaan Rutin' ? 'selected' : ''; ?>>Pemeriksaan Rutin</option>
+                    <option value="Emergency" <?php echo $appointment['jenis_layanan'] === 'Emergency' ? 'selected' : ''; ?>>Emergency</option>
+                    <option value="Lainnya" <?php echo $appointment['jenis_layanan'] === 'Lainnya' ? 'selected' : ''; ?>>Lainnya</option>
                 </select>
-                <p class="mt-2 text-sm text-gray-500" id="serviceInfo"></p>
             </div>
 
             <!-- Doctor Selection -->
@@ -295,20 +268,20 @@ include '../includes/header.php';
             <!-- Date and Time -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2" for="tanggal">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="tanggal_appointment">
                         Tanggal <span class="text-red-500">*</span>
                     </label>
-                    <input type="date" name="tanggal" id="tanggal" required
-                           value="<?php echo $appointment['tanggal']; ?>"
+                    <input type="date" name="tanggal_appointment" id="tanggal_appointment" required
+                           value="<?php echo $appointment['tanggal_appointment']; ?>"
                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2" for="jam_mulai">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="jam_appointment">
                         Jam <span class="text-red-500">*</span>
                     </label>
-                    <input type="time" name="jam_mulai" id="jam_mulai" required
-                           value="<?php echo date('H:i', strtotime($appointment['jam_mulai'])); ?>"
+                    <input type="time" name="jam_appointment" id="jam_appointment" required
+                           value="<?php echo date('H:i', strtotime($appointment['jam_appointment'])); ?>"
                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
@@ -330,12 +303,12 @@ include '../includes/header.php';
 
             <!-- Complaint -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2" for="keluhan">
+                <label class="block text-sm font-medium text-gray-700 mb-2" for="keluhan_awal">
                     Keluhan <span class="text-red-500">*</span>
                 </label>
-                <textarea name="keluhan" id="keluhan" rows="3" required
+                <textarea name="keluhan_awal" id="keluhan_awal" rows="3" required
                           class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Deskripsikan keluhan atau alasan kunjungan..."><?php echo htmlspecialchars($appointment['keluhan']); ?></textarea>
+                          placeholder="Deskripsikan keluhan atau alasan kunjungan..."><?php echo htmlspecialchars($appointment['keluhan_awal']); ?></textarea>
             </div>
 
             <!-- Notes -->
@@ -365,10 +338,9 @@ include '../includes/header.php';
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('appointmentForm');
     const petSelect = document.getElementById('pet_id');
-    const serviceSelect = document.getElementById('layanan_id');
     const doctorSelect = document.getElementById('dokter_id');
-    const dateInput = document.getElementById('tanggal');
-    const timeInput = document.getElementById('jam_mulai');
+    const dateInput = document.getElementById('tanggal_appointment');
+    const timeInput = document.getElementById('jam_appointment');
     const statusSelect = document.getElementById('status');
     
     // Update owner info when pet is selected
@@ -380,18 +352,6 @@ document.addEventListener('DOMContentLoaded', function() {
             ownerInfo.textContent = `Pemilik: ${selectedOption.dataset.owner} - ${selectedOption.dataset.phone}`;
         } else {
             ownerInfo.textContent = '';
-        }
-    }
-
-    // Update service info when service is selected
-    function updateServiceInfo() {
-        const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
-        const serviceInfo = document.getElementById('serviceInfo');
-        
-        if (serviceSelect.value) {
-            serviceInfo.textContent = `Durasi: ${selectedOption.dataset.duration} menit - Biaya: Rp ${selectedOption.dataset.price}`;
-        } else {
-            serviceInfo.textContent = '';
         }
     }
 
@@ -427,13 +387,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial updates
     updateOwnerInfo();
-    updateServiceInfo();
     updateDoctorSchedule();
     updateStatusOptions();
 
     // Event listeners
     petSelect.addEventListener('change', updateOwnerInfo);
-    serviceSelect.addEventListener('change', updateServiceInfo);
     doctorSelect.addEventListener('change', updateDoctorSchedule);
     dateInput.addEventListener('change', updateStatusOptions);
     timeInput.addEventListener('change', updateStatusOptions);

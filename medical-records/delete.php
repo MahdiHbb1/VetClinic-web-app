@@ -89,21 +89,12 @@ try {
         'Rekam medis dihapus oleh ' . $_SESSION['nama_lengkap']
     );
 
-    // Mark record as deleted
+    // Delete the medical record permanently
     $stmt = $pdo->prepare("
-        UPDATE medical_record SET
-            status = 'Deleted',
-            updated_by = ?,
-            updated_at = NOW(),
-            deleted_by = ?,
-            deleted_at = NOW()
-        WHERE record_id = ?
+        DELETE FROM medical_record 
+        WHERE rekam_id = ?
     ");
-    $stmt->execute([
-        $_SESSION['user_id'],
-        $_SESSION['user_id'],
-        $record_id
-    ]);
+    $stmt->execute([$record_id]);
 
     $pdo->commit();
     $_SESSION['success'] = "Rekam medis berhasil dihapus";

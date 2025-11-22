@@ -8,7 +8,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com data:");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Data Dokter Hewan";
 
@@ -160,7 +160,7 @@ include '../includes/header.php';
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         <?php foreach ($suppliers as $supplier): ?>
-                            <tr>
+                            <tr class="hover:bg-gray-50">
                                 <td class="px-4 py-2">
                                     <div>
                                         <div class="font-medium text-gray-900">
@@ -184,7 +184,7 @@ include '../includes/header.php';
                                 </td>
                                 <td class="px-4 py-2">
                                     <?php if ($supplier['kontak']): ?>
-                                        <div class="text-sm">
+                                        <div class="text-sm text-gray-900">
                                             <i class="fas fa-phone text-gray-400 mr-1"></i>
                                             <?php echo htmlspecialchars($supplier['kontak']); ?>
                                         </div>
@@ -194,7 +194,7 @@ include '../includes/header.php';
                                 </td>
                                 <td class="px-4 py-2">
                                     <?php if ($supplier['email']): ?>
-                                        <div class="text-sm">
+                                        <div class="text-sm text-gray-900">
                                             <i class="fas fa-envelope text-gray-400 mr-1"></i>
                                             <?php echo htmlspecialchars($supplier['email']); ?>
                                         </div>
@@ -204,7 +204,7 @@ include '../includes/header.php';
                                 </td>
                                 <td class="px-4 py-2">
                                     <?php if ($supplier['jadwal']): ?>
-                                        <div class="text-sm text-gray-700">
+                                        <div class="text-sm text-gray-900">
                                             <?php echo htmlspecialchars($supplier['jadwal']); ?>
                                         </div>
                                     <?php else: ?>

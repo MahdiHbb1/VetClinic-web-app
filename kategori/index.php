@@ -8,7 +8,7 @@ header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com data:");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net code.jquery.com cdn.datatables.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.datatables.net fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com fonts.gstatic.com data:");
 
 $page_title = "Data Kategori";
 
@@ -60,7 +60,8 @@ $stmt = $pdo->prepare("
         kategori as tipe,
         deskripsi,
         harga as biaya,
-        status_tersedia as status_aktif
+        status_tersedia,
+        CASE WHEN status_tersedia = 1 THEN 'Active' ELSE 'Inactive' END as status
     FROM service
     WHERE $where_clause
     ORDER BY kategori, nama_layanan

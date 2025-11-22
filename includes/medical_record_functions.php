@@ -82,6 +82,18 @@ function get_medical_record($pdo, $record_id) {
         $stmt = $pdo->prepare("
             SELECT 
                 mr.*,
+                mr.tanggal_kunjungan as tanggal,
+                mr.diagnosa as diagnosis,
+                mr.catatan_dokter as catatan,
+                'Active' as status,
+                mr.tanggal_kunjungan as created_at,
+                0 as biaya,
+                '' as resep,
+                NULL as created_by,
+                NULL as updated_by,
+                NULL as updated_at,
+                '' as created_by_name,
+                '' as updated_by_name,
                 p.nama_hewan,
                 p.jenis as jenis_hewan,
                 p.ras as ras_hewan,

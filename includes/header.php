@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo $page_title ?? 'VetClinic'; ?></title>
+    
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- DataTables -->
+    <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link href="/assets/css/style.css" rel="stylesheet">
+    
+    <?php if (isset($use_chart)): ?>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <?php endif; ?>
+    
+    <style>
+        @media (min-width: 1024px) {
+            #sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 16rem;
+            }
+            .main-container {
+                margin-left: 16rem;
+            }
+        }
+        @media (max-width: 1023px) {
+            #sidebar {
+                transform: translateX(-100%);
+            }
+            #sidebar.show {
+                transform: translateX(0);
+            }
+            .main-container {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+
+    <!-- Include Sidebar -->
+    <?php include '../includes/sidebar.php'; ?>
+
+    <div class="main-container">
+        <div class="flex flex-col min-h-screen">
+            <!-- Top Header -->
+            <header class="bg-white shadow-sm sticky top-0 z-40">
+                <div class="px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <!-- Mobile menu button -->
+                        <button id="mobileSidebarToggle" class="lg:hidden mr-4 text-gray-600 hover:text-gray-900">
+                            <i class="fas fa-bars text-xl"></i>
+                        </button>
+                        
+                        <h1 class="text-xl font-semibold text-gray-800"><?php echo $page_title ?? 'Dashboard'; ?></h1>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <!-- Notifications -->
+                        <div class="relative">
+                            <button id="notificationButton" class="text-gray-600 hover:text-gray-900 relative">
+                                <i class="fas fa-bell text-xl"></i>
+                                <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                                    3
+                                </span>
+                            </button>
+                            
+                            <!-- Notification Dropdown -->
+                            <div id="notificationDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-50 max-h-96 overflow-y-auto">
+                                <div class="px-4 py-2 border-b">
+                                    <h3 class="font-semibold text-gray-800">Notifikasi</h3>
+                                </div>
+                                <div class="divide-y">
+                                    <a href="/appointments/" class="block px-4 py-3 hover:bg-gray-50">
+                                        <p class="text-sm font-medium text-gray-800">Janji Temu Hari Ini</p>
+                                        <p class="text-xs text-gray-600">Ada 3 janji temu yang akan datang</p>
+                                        <p class="text-xs text-gray-400 mt-1">2 jam yang lalu</p>
+                                    </a>
+                                    <a href="/inventory/" class="block px-4 py-3 hover:bg-gray-50">
+                                        <p class="text-sm font-medium text-gray-800">Stok Obat Menipis</p>
+                                        <p class="text-xs text-gray-600">Beberapa obat perlu restok</p>
+                                        <p class="text-xs text-gray-400 mt-1">5 jam yang lalu</p>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- User Dropdown -->
+                        <div class="relative">
+                            <button id="userMenuButton" class="flex items-center space-x-2">
+                                <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['nama_lengkap']); ?>&background=random" alt="Profile">
+                                <span class="hidden md:inline-block text-gray-700"><?php echo $_SESSION['nama_lengkap']; ?></span>
+                                <i class="fas fa-chevron-down text-gray-500"></i>
+                            </button>
+                            
+                            <!-- Dropdown Menu -->
+                            <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                                <a href="/users/profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-user mr-2"></i> Profil
+                                </a>
+                                <a href="/auth/logout.php" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="flex-1 bg-gray-100">
+                <div class="container mx-auto px-4 py-6">

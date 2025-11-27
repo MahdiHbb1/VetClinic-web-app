@@ -42,7 +42,10 @@ services:
       MYSQL_PASSWORD: vetclinic_password
     volumes:
       - vetclinic_data:/var/lib/mysql
-      - ./database/vetclinic.sql:/docker-entrypoint-initdb.d/vetclinic.sql
+      # Mount schema as 01 to run first
+      - ./database/vetclinic.sql:/docker-entrypoint-initdb.d/01_vetclinic.sql
+      # Mount test data as 02 to run second
+      - ./database/test_data.sql:/docker-entrypoint-initdb.d/02_test_data.sql
     ports:
       - "3306:3306"
     networks:

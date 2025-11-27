@@ -4,34 +4,61 @@ require_once 'config/database.php';
 $message = '';
 $error = '';
 
+// Function to execute SQL file with multiple statements
+function executeSqlFile($pdo, $filepath) {
+    $sql = file_get_contents($filepath);
+    if ($sql === false) {
+        throw new Exception("Could not read $filepath");
+    }
+    
+    // Remove comments
+    $sql = preg_replace('/--.*$/m', '', $sql); // Remove single-line comments
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql); // Remove multi-line comments
+    
+    // Split by semicolon
+    $statements = explode(';', $sql);
+    
+    $executed = 0;
+    foreach ($statements as $statement) {
+        $statement = trim($statement);
+        
+        // Skip empty statements
+        if (empty($statement)) {
+            continue;
+        }
+        
+        // Skip USE statements (we're already using the database)
+        if (stripos($statement, 'USE ') === 0) {
+            continue;
+        }
+        
+        try {
+            $pdo->exec($statement);
+            $executed++;
+        } catch (PDOException $e) {
+            // Log but continue (some statements might fail on re-runs)
+            error_log("SQL Error: " . $e->getMessage() . " in statement: " . substr($statement, 0, 100));
+        }
+    }
+    
+    return $executed;
+}
+
 if (isset($_POST['reset'])) {
     try {
-        // Disable foreign key checks to allow dropping tables
+        // Disable foreign key checks
         $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
-
-        // Read and execute schema
-        $schema = file_get_contents(__DIR__ . '/database/vetclinic.sql');
-        if ($schema === false) {
-            throw new Exception("Could not read database/vetclinic.sql");
-        }
         
-        // Split SQL by semicolon, but be careful with stored procedures/triggers if any
-        // For simple dumps, splitting by ; works mostly, but let's try to execute raw if possible
-        // PDO can execute multiple statements if emulation is on, but let's do it safely
+        // Execute schema
+        $schemaCount = executeSqlFile($pdo, __DIR__ . '/database/vetclinic.sql');
         
-        $pdo->exec($schema);
+        // Execute test data
+        $dataCount = executeSqlFile($pdo, __DIR__ . '/database/test_data.sql');
         
-        // Read and execute test data
-        $data = file_get_contents(__DIR__ . '/database/test_data.sql');
-        if ($data === false) {
-            throw new Exception("Could not read database/test_data.sql");
-        }
-        
-        $pdo->exec($data);
-
+        // Re-enable foreign key checks
         $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
         
-        $message = "Database berhasil di-reset dan data dummy telah dimasukkan!";
+        $message = "Database berhasil di-reset! Berhasil mengeksekusi " . ($schemaCount + $dataCount) . " statement SQL.";
         
     } catch (Exception $e) {
         $error = "Error: " . $e->getMessage();

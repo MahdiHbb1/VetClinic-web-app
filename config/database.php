@@ -64,4 +64,3 @@ while ($attempt <= $max_retries) {
         }
     }
 }
-?>

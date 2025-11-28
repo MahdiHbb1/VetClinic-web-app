@@ -1,42 +1,52 @@
-# Docker volumes and data
-docker/mysql/
-
-# Storage and uploads
-storage/
-uploads/
+# Dependencies
+node_modules/
+vendor/
 
 # Environment files
 .env
 .env.local
 
-# Database backups
-*.sql.gz
-backup_*.sql
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Logs
+*.log
+error_log
 
 # OS files
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Logs
-*.log
-error_log
-access_log
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Upload directories
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# Large database dumps (keep only essential ones)
+database/exports/vetclinic_full_*.sql
+database/exports/vetclinic_data_*.sql
+database/exports/table_*.sql
+
+# Keep these database files
+!database/vetclinic.sql
+!database/schema.sql
+!database/test_data.sql
+!database/seeds/*.sql
+!database/vetclinic_latest_export.sql
+
+# Docker volumes
+docker/mysql/data/
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 
-# Node modules (if any)
-node_modules/
-
-# Composer vendor (if any)
-vendor/
+# Backup files
+*.bak
+*.backup
+*_backup.*
